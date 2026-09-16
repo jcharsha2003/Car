@@ -1,0 +1,834 @@
+II Architecture: Virtualization Layer Approach
+
+Virtual integration favours freshness and source autonomy over predictable performance.
+
+Workflow: 
+Query → decomposition → wrapper invocation → integration
+
+Integration for creating a single site to search for jobs/rentals/…
+
+Data Source Selection, 
+Schema Matching and Mapping
+
+Data Source Selection
+
+ Once you have the set of questions for querying  integrated 
+
+data using the mediator approach, the next step is to identify 
+the data  sources [This is also true for other approaches of II]
+
+ Must evaluate the data sources to know which to select
+– Is it complete? In terms of coverage? In terms of missing data?
+– Is it correct?
+– Is it clean?
+
+– Is it structured? If not, can you extract structured data out of it easily  and 
+
+accurately or expose text document as an attribute?
+
+– Is it up to date? How quickly is it changing?
+
+– Hard to answer some of these questions until you have acquired  some data 
+
+from the sources
+
+Data Acquisition
+
+ Then need to acquire the data from the sources
+
+– This is highly non-trivial
+– Types of data sources:
+
+ Structured data sources: relational databases, XML files, …
+ Textual data: emails, memos, documents, etc.
+ Web data: need to crawl, maybe can get a dump, API may exist
+ Other types of data: excel, pdf, images, etc.
+
+– Being able to extract data from such sources is non-trivial, time  consuming
+– Build connectors, wrappers,…
+– Some of the data come from within the company
+
+ Need to talk with data owner, convincing him/her, get help to get the data
+ Can take months – acquisition due to legal and compliance  reasons.
+
+– Some of the data come from outside the company
+ Public data, Open source data, Paid data
+
+– Pros: clean, quick
+-- Cons: untrustworthy, noisy, expensive
+
+Understanding, Cleaning, & Transformation
+Do These for Each Source, then Integrate
+
+ For data from each source
+
+– Data problems
+
+– missing values, incorrect values, illegal values, outliers, misspellings
+
+– Synonyms, conflicting data (eg, age and birth year)
+
+–
+
+variations of values, duplicate tuples, wrong value formats
+
+– understand current vs ideal schema/data
+
+– Attribute values profiling, relationship between  attributes, integrity constraints…
+
+– Tools exist for data profiling, relationship discovery,…
+– Identify violations of constraints, if any, for the schema/data
+– clean and transform
+– possibly enrich/enhance
+
+ Integrate data from the multiple sources
+
+– schema matching/merging, data matching/merging
+
+– misspelt names
+
+–
+
+violating constraints (key, uniqueness, foreign key, etc)
+
+Matching discovers correspondences; mapping operationalizes them into executable 
+integration logic.
+
+Schema matching vs schema mapping
+
+Schema matching asks
+
+• Which elements correspond?
+
+• Does customer_name match client_full_name?
+
+• Can one source attribute map to several target 
+concepts?
+
+• How strong is the correspondence?
+
+Input: Two or more schemas Σ1, Σ2, … , Σn.
+
+•
+• Output: A set of correspondences:
+
+• M = {(ai, bj , sim(ai, bj )) ∣ ai ∈
+
+Σ1, bj ∈ Σ2}
+
+• Objective: Identify semantically related
+
+attributes, i.e.
+
+sim(a,b) ∈ [0,1]
+Match if sim(a,b)≥θ 
+
+Schema mapping asks
+• How do we express the correspondence formally?
+
+• What transformation is required?
+
+• Can the mapping be executed?
+
+• Does it require joins, filters, aggregation or 
+functions?
+
+• How can queries be rewritten?
+
+Matching is discovery; mapping is an executable semantic relationship.
+
+3
+
+Why schema matching is hard
+
+Common semantic problems
+
+Synonyms (Naming Conflict): customer_name vs client_name
+Acronyms: DOB = Date of Birth
+Granularity: full_name vs first_name + last_name
+Structural mismatch: nested relations vs tables
+Derived attributes: age vs date_of_birth
+Temporal mismatch: current vs historical department
+Semantic Conflicts: NetPrice = GrossPrice – Discount
+Representation Conflicts: Date = DD/MM/YYYY vs YYYY-MM-DD
+
+Evidence beyond names
+Data types and constraints
+Value distributions / examples
+Neighbouring attributes
+Keys and foreign keys
+Table/class context
+Business glossary / ontology
+Source ownership and provenance
+
+A strong matcher uses names + structure + instances + constraints + context.
+
+4
+
+The Schema Matching Problem
+
+Given two input schemas in any data model and, optionally, auxiliary 
+information,  compute a mapping between schema elements of the two 
+input schemas that passes user validation.
+
+Query
+
+Global Schema
+
+in
+
+Source-1
+
+Source-2
+
+Books
+
+ISBN
+Title
+
+char(15) key  
+varchar(100)
+
+Author varchar(50)  
+MarkedPrice float
+
+BookInfo
+
+ID
+AuthorID
+BookTitle
+ListPrice
+DiscountPrice
+
+char(15) Primary Key
+integer references AuthorInfo
+varchar(150)
+float
+float
+
+πISBN,Title,MarkedPrice(Books)
+= πID,BookTitle,ListPrice(BookInfo)
+πAuthor(Books) = πFirstName+LastName(AuthorInfo)
+
+AuthorInfo
+integer
+AuthorID
+
+key  
+
+LastName
+
+varchar(25)
+
+FirstName
+
+varchar(25)
+
+Books= πID, BookTitle, FirstName+LastName, ListPrice(BookInfo ⋈ AuthorInfo)
+
+Inputs to Matching Technique
+
+• Schema structure
+
+• Constraints: data type, keys,  nullability
+
+• Attribute names
+
+• Synonyms
+
+• Acronyms
+
+Code = Id = Num = No  
+
+Zip=PIN = Postal [code]  
+
+Node = Server
+
+◦ PO = Purchase Order
+
+◦ UOM = Unit of Measure
+
+◦ SS# = Social Security Number
+
+• Data instances
+
+Attributes match if they have similar instances or value
+distributions
+
+Similarity Functions
+
+• Lexical (Linguistic)-based: Edit distance, Jaccard, cosine (token-level), synonym 
+
+expansion
+
+• Semantic-based: WordNet, ontologies, embeddings. 
+
+• Structural-based: Uses schema tree/graph
+
+•
+
+Instance-based: Distribution similarity (e.g., KL divergence).
+
+• Hybrid:
+
+sim(a, b) = α ⋅ simlex(a, b) + β ⋅ simsem(a, b) + γ ⋅ siminst(a, b)
+
+Linguistic/Lexical  Matching
+
+• Tokenization of names
+
+• PurchaseOrder  purchase + order
+
+• Expansion of acronyms
+
+• UOM  unit + of + measure
+
+• Clustering based on keywords and data-types
+
+• Street, City, POAddress  Address
+
+• Linguistic similarity
+
+• Pair-wise comparison of elements that belong to the same cluster
+• Token similarity = f(string matching, synonyms score)
+• Token set similarity = average (best matching token similarity)
+
+• Thesaurus: acronymns, synonyms, stop words and categories
+
+Example – Linguistic/Lexical Matching
+
+Schema 1: Customer(CustID, Name, Address)
+Schema 2: Client(CustomerNumber, FullName, Location)
+
+Similarities:
+
+CustID ↔ CustomerNumber = 0.92 (edit distance). 
+
+Name ↔ FullName = 0.88 (cosine).
+
+Address ↔ Location = 0.73 (Jaccard).
+
+Threshold θ = 0.8 → first two accepted as matches.
+
+Example – Semantic Matching
+
+Schema 1: Invoice(TotalPrice)
+
+Schema 2: Order(GrossPrice, Discount) 
+
+Ontology rule:
+
+TotalPrice = GrossPrice − Discount
+
+Transformation rule derived (Mapping between Schema 1 and 2):
+
+SELECT (GrossPrice – Discount) AS TotalPrice FROM Order;
+
+Structure Matching
+
+PO
+
+PurchaseOrder
+
+POShipTo
+
+Name
+
+City
+
+Street
+
+POLines
+
+Items
+
+Item
+
+Item
+
+DeliverTo
+
+Name
+
+Address
+
+Line
+
+UoM
+
+Qty
+
+ItemNumber
+
+UnitOfMeasure
+
+Quantity
+
+City Street
+
+Tree Match Algorithm (Bottom-up Traversal)
+
+• Atomic elements (leaves) are similar if
+
+•
+
+Linguistically and data-type similar
+
+•
+
+Their contexts, i.e., ancestors, are similar
+• Compound elements (non-leaves) are similar if
+
+Linguistically similar
+
+•
+
+•
+
+Elements in their context, i.e., subtrees rooted at the  elements, are similar
+
+• Mutually dependent formulation
+
+•
+
+•
+
+Leaves determine internal node similarity
+
+Similarity of internal nodes leads to increase in 
+
+leaf similarity
+
+Schema-based hybrid matching algorithm
+
+Based on combining multiple approaches that use only schema (no instances)
+
+Input: Two schema graphs
+Output: Similarity matrix and candidate mapping
+
+• Linguistic matching: compare attributes based on names, data types, etc
+
+• Use a thesaurus to help match names by identifying short-forms (Qty for Quantity),
+acronyms (UoM for UnitOfMeasure) and synonyms (Bill and Invoice). The result is
+a linguistic similarity coefficient, Lsim, between each pair of elements.
+
+• Structure matching: compare elements based on the similarity of their  contexts or 
+
+vicinities. The result is a structural similarity coefficient, Ssim,  for each pair of elements.
+
+• Compute the Weighted similarity: Wsim = w * Lsim + (1 – w) * Ssim
+
+• Mapping generation: a mapping is created by choosing pairs of schema  
+
+elements with maximal weighted similarity.
+
+Collective Schema Matching
+
+allcars.com
+
+craigslist auto
+
+[He+, SIGMOD’03]: Build mediated schema for a domain by clustering elements in  
+multiple schemas
+
+Schema Mapping
+
+• Global schema defined in terms of sources  
+(global schema centric or Global-As-View  
+(GAV))
+• Query reformulation easier
+• Any change in sources schema, needs 
+
+change in  global schema
+
+• Global relations cannot model any information  
+
+not present in at least one source.
+
+Query
+
+Global Schema
+
+• Sources defined in terms of global schema  
+(source-centric or Local-As-View (LAV))
+
+• High modularity and extensibility (if the  
+global schema is well designed, when a  
+source changes, only its definition is  
+affected)
+
+• Query reformulation complex
+• It allows to add a source to the system  
+
+independently of other sources.
+
+Source-1
+
+Source-2
+
+Mapping Rule Formalism and Composition
+
+• Given a ∈ Σ1, b ∈ Σ2.
+
+• Transformation function:
+
+• b = f (a)
+
+• Examples of f :
+
+Identity: b = a. 
+•
+• Scaling: b = a × c.
+• Derived: b = a1 + a2.
+
+•
+
+If M12 : Σ1 → Σ2 and M23 : Σ2 → Σ3, then:
+
+• M13 = M23 ∘ M12
+
+• Enables chaining transformations. 
+
+• Example: CSV → JSON → Relational DB.
+
+Example
+
+Example taken from Dr. Subbarao Kambhampati’s lecture notes.
+
+Global-as-View (GAV)
+
+Local-as-View (LAV)
+
+GAV
+
+vs.
+
+LAV
+
+• Not modular
+
+• Modular--adding new sources is  easy
+
+– Addition of new sources  
+
+changes the mediated  schema
+
+• Can be awkward to write  mediated 
+schema without loss of information
+
+• Very flexible--power of the  entire 
+
+query language available  to describe
+sources
+
+• Query reformulation easy
+
+– reduces to view unfolding  
+
+(polynomial)
+
+– Can build hierarchies of  
+
+mediated schemas
+
+• Reformulation is hard
+
+– Involves answering queries  only 
+
+using views 
+
+• Best when
+
+– Few, stable, data sources
+– well-known to the mediator  (e.g. 
+
+corporate integration)
+
+• Garlic, TSIMMIS,  
+
+HERMES
+
+• Best when
+
+– Many, relatively unknown  data
+
+sources
+
+– possibility of  addition/deletion of
+
+sources
+
+• Information Manifold,  
+
+InfoMaster, Emerac,  Havasu
+
+Q1: The ‘BookStore.com’ is an aggregator that provides a single stop solution to their clients 
+for buying books. The business has agreement with three suppliers, and the schema of each 
+supplier is given below. Note, each supplier may have a different price for the same book. The 
+primary key in each schema is underlined. 
+Supplier1(ISBN, Book_Name, Book_Price) 
+Supplier2(ISBN, BTitle, BPrice) 
+Supplier3(ISBN, Book_Title, Price) 
+
+a. Design the global schema of the BookStore.com where (1) the client can create his/her 
+
+profile (Name, Home#, St-Name, Area, City, PIN, Mobile), (2) the client can view/search all 
+his/her current and past transactions (Order#, Date, ISBN, Book-Title, Price, Supplier-
+Name), and (3) the client can search the books availability by <title> and/or <ISBN> and can 
+also view the supplier name. 
+
+b. Write the schema mapping between the global schema (obtained in part (a)) and local 
+schemas using GAV.
+
+c. The BookStore.com decides to show the supplier name selling the book at the lowest price 
+among all, that is, 1 record per ISBN unless more than one supplier has the same lowest price. 
+this case, it displays information of all suppliers. For this constraint, design the schema and its 
+mapping to global schema (obtained in part (a)). 
+
+ML/DL based Algorithmic Approaches
+
+1. Rule-based Matching: handcrafted rules.
+
+2. Machine Learning: supervised or semi-supervised classifiers. 
+
+a. Input: feature vector f (a, b).
+b. Output: match / non-match probability.
+
+3. Deep Learning: embedding-based similarity (BERT, graph embeddings).
+
+AI/ML-driven schema matching pipeline
+
+Represent
+Name + 
+context
+
+→
+
+Embed
+Text / 
+structure 
+→ vector
+
+→
+
+Retrieve
+Top-k 
+candidates
+
+→
+
+Score
+Semantic + 
+structural 
++ instance
+
+→
+
+Constraint
+Types / 
+keys / 
+ontology
+
+→
+
+Review
+Human / 
+model
+
+→
+
+Learn
+Feedback 
+→ 
+matcher
+
+THINK
+Why should embeddings primarily generate candidates rather than directly decide equivalence?
+
+What should be embedded?
+
+• Attribute name and description.
+
+• Table/schema context and neighbouring attributes.
+
+• Representative data values and distributions.
+
+• Keys, foreign keys and relationship structure.
+
+• Ontology class/property, domain and range.
+
+• Business glossary, source owner and temporal context.
+
+The best representation embeds context, not just the column name.
+
+Embedding representation — example
+
+Weak representation
+
+embed('cust_nm')
+
+Very little semantic context.
+
+Possible candidates:
+customer_name
+customer_number
+customer_status
+party_name
+
+Context-rich representation
+
+embed('Attribute: cust_nm
+Table: CUSTOMER
+Meaning: unique customer name
+Type: VARCHAR
+Examples: Anil Kumar, Sarah Lee
+Neighbours: cust_id, email')
+
+Context-rich embeddings reduce ambiguity because the model sees meaning, type, 
+examples and relational context.
+
+Candidate generation with embeddings
+
+Step 1 — vector retrieval
+
+• Encode source attribute as e_s.
+• Encode target attributes as e_t.
+• Compute cosine similarity:
+• sim(e_s,e_t)=(e_s·e_t)/(||e_s|| ||e_t||)
+• Retrieve top-k target candidates.
+
+Step 2 — validate/rerank
+
+• Datatype compatibility.
+• Value distribution similarity.
+• Structural-neighbour similarity.
+• Key / foreign-key compatibility.
+• Ontology domain/range.
+• Cross-encoder/LLM/human review.
+
+Embedding similarity is a retrieval signal—not semantic proof.
+
+Concrete embedding example
+
+Source attribute
+SIS_STUDENT.full_name
+Type: VARCHAR
+Examples: Anil Kumar, Sarah Lee
+Neighbours: sid, mail
+Table: student master data
+
+Candidates
+STUDENT.name → 0.94
+INSTRUCTOR.name → 0.91
+DEPARTMENT.dept_name → 0.62
+
+Embedding alone cannot 
+distinguish the first two.
+
+Structural context and constraints break the tie.
+
+Multi-signal matching model
+
+Feature signals
+• N = name/description similarity
+• I = instance/value similarity
+• S = structural similarity
+• C = constraint/type compatibility
+• O = ontology compatibility
+
+Simple ranker
+• Score = wN·N + wI·I + wS·S + wC·C + wO·O
+• Weights may be hand-designed or 
+learned.
+• Use labelled correspondences for 
+supervised ranking.
+• Evaluate top-1 and top-k performance.
+
+Research question: can the weights be learned across domains without losing 
+explainability?
+
+Entity-level extension — embeddings + evidence
+
+Candidate pair
+
+Student:
+name = 'A. Kumar'
+email = 'akumar@uni.edu'
+
+Person:
+name = 'Anil Kumar'
+email = 'anil.kumar@uni.edu'
+
+Decision evidence
+
+name embedding = high
+email/domain = strong
+
+affiliation = compatible
+coauthor/context = medium
+
+→ high match probability
+→ retain evidence + confidence
+
+Schema matching and entity resolution can share representations, but they solve 
+different integration problems.
+
+Where embedding-based matching fails
+
+Semantic traps
+• Address vs billing_address: related, not 
+equivalent.
+• Revenue vs profit: related, not equivalent.
+• Status: source-specific meaning.
+• Course code vs course ID: similar labels, 
+different semantics.
+
+Engineering traps
+• Poor documentation poisons embeddings.
+• Rare values may be uninformative.
+• Domain abbreviations may be unseen.
+• Model bias/drift changes similarity.
+• Thresholds do not transfer reliably.
+
+Use embeddings to accelerate discovery; use domain constraints and evidence to 
+establish correctness.
+
+Tools & Frameworks
+
+• Traditional: Clio, COMA++, Cupid. 
+
+• ML based: DeepMatcher, Magellan. 
+
+• ETL Systems: Informatica, Talend.
+
+• Big Data: Apache NiFi, Spark SQL.
+
+Clio: Schema Discovery and Mapping for Integration
+
+CLIO Architecture
+
+(SQL/XQuery/XSLT/…)
+
+Takeaways
+
+• Schema matching = fundamental for integration, NP-hard in
+
+general → heuristics & ML essential. 
+
+• Transformation rules enable data exchange. Mapping rules
+
+formalized via Datalog, SQL, or ontology mappings. 
+
+•
+
+Linguistic, structural, instance-based, hybrid approaches
+
+(semantic + ML/DL + rule-based) are state-of-art.
+
+• Practical: often semi-automatic + domain expert validation.
+
+• Key open problems: scalability, dynamic schema evolution, 
+
+probabilistic mappings.
+
+

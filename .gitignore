@@ -1,0 +1,64 @@
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# ─── Node / Frontend ─────────────────────────────────────────────────────────
+node_modules/
+dist/
+.cache/
+*.tsbuildinfo
+
+# ─── SQLite Databases (seeded locally — not committed to git) ────────────────
+# Run: python scripts/seed_databases.py   to recreate them
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# ─── ML Model weights (downloaded automatically on first run) ────────────────
+*.pt
+*.onnx
+*.torchscript
+runs/
+
+# ─── EasyOCR model cache ──────────────────────────────────────────────────────
+.EasyOCR/
+
+# ─── Environment / secrets ───────────────────────────────────────────────────
+.env
+frontend/.env
+*.env.local
+*.env.production
+
+# ─── IDE / OS ────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Test artefacts ──────────────────────────────────────────────────────────
+htmlcov/
+.coverage
+coverage.xml

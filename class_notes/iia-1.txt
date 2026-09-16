@@ -1,0 +1,1375 @@
+Google Classroom Code: qb53eogc
+
+ Please register by Today  (i.e. August 17, 2026) midnight since all communication will be 
+
+done through GC.
+
+-- IF NOT registered by midnight today, A PENALTY OF 0.5 MARKS will be applied.
+
+ There are 124 students registered in this course.
+
+ Project: Build a system using vibe coding 
+
+ Choose any one project, 4 students/project, Make your own group by August 19, 
+ No further extension will be granted for evaluation
+ Projects will be evaluated by the TAs on the evaluation day T + 2 days.
+ On each evaluation day T, 4-5 groups will be randomly chosen to present/demo their project in 
+the classroom. If the group is absent or not ready, will get a penalty of -5 (minus five) marks.
+
+-- Project-Part A: 15 marks (Traditional Data Integration) [T: Sept 16]
+-- Project-Part B: 15 marks (Data Integration under uncertainty) [T: Oct 14]
+-- Project-Part C: 10 marks (Data + Content Integration and querying through NLQ) [T: Nov 23]
+
+ Class quizzes: 10 marks (number of quizzes are not fixed)
+ Class interaction, research paper discussions and assignments: 10 marks
+ Mid-sem exam: 15 marks
+ End-sem exam: 25 marks
+
+You can reach out to me any day for project discussion. Send me an email first to schedule the
+online/offline meeting.
+
+Project 1: Identification of uninsured vehicles
+
+ Identification on uninsured vehicle while they are on road
+
+ Use case: Given a vehicle on the road, we would like to know the complete 
+
+history (view) of this vehicle [whether this vehicle is insured or not or insurance 
+has expired, (2) when it was registered, etc
+
+ Create multiple structured data sources having information about (1) capturing 
+vehicle registration (car number plate) and other description of vehicle (2) 
+vehicle insurance details (3) vehicle registration details (4) vehicle theft and 
+shredding information (5) report to the Ministry of Transportation if the vehicle 
+is not insured or any suspicion.  
+
+ Design the schema of each DB, populate data, assume you have at least 
+
+one column with same value (the column/attribute name may be different) 
+since these databases are designed in isolation
+
+Goal: From heterogeneous data to intelligent, trustworthy and 
+decision-centric integration
+
+Project 2: Identification of Asali or Nakali items
+
+ Identification of fake items (medicine) while purchasing
+
+ Use case: You are purchasing an item, we would like to know the complete 
+
+history (view) of this item [whether this item is genuine or not (2) when it was 
+procured (3) who was the distributor/supplier
+
+ Create multiple structured data sources having information about (1) capturing 
+item unique code and other description of item (2) distributor/supplier details 
+and items they are distributing to vendors (3) item details by manufacturer 
+(company) with unique code (4) report to the Ministry of Consumer Affairs if 
+the item is Nakali
+
+ Design the schema of each DB, populate data, assume you have at least 
+
+one column with same value (the column/attribute name may be different) 
+since these databases are designed in isolation
+
+Goal: From heterogeneous data to intelligent, trustworthy and 
+decision-centric integration
+
+Quiz 1 (one mark)
+
+Think and write any innovative information integration application, as an use 
+case, which has not been discussed in the class. Particularly address (1) What is 
+the application (what does the application do)? (2) why is it important and what 
+business value does integration create?, and (3) who will be using it for what 
+purpose?
+
+• Don’t propose any design solution
+
+Course vision
+
+•
+
+Traditional view: combine heterogeneous data sources.
+
+•
+
+Information Integration refers to a category of middleware  which lets applications access data as 
+though it were in a  single database, whether or not it is.
+
+• Modern view: integration is reasoning about meaning, identity, uncertainty and 
+
+evidence.
+
+•
+
+•
+
+It enables the integration of data and content sources to provide real-time read and write access,
+to transform data for business analysis and data interchange, and to data placement for
+performance, currency and availability.
+The goal of data integration: tie together different sources, controlled by many people, under a
+common schema.
+
+Future view: LLMs and agents can participate in integration—but must be 
+verified.
+
+End goal: integrated information that improves decisions, not merely a larger 
+dataset.
+
+THINK DIFFERENTLY
+When two sources disagree, how should an intelligent system decide what to believe?
+
+2
+
+•
+
+•
+
+Clue: The answer will evolve throughout the course.
+
+Discussion pattern for each topic
+
+• We will start with a real-world case study.
+
+• We will take one design question/problem (start with a contradiction or failure).
+
+• You need to propose the solution(s) 'Think Differently‘, justifying your algorithm/ 
+
+explanations.
+
+• Think for a business-value argument alongside the technical solution.
+
+• We will introduce the formal model / algorithm / architecture.
+
+• You need to revisit the original question and challenge the assumptions.
+
+• End with a research question: what remains unsolved?
+
+26
+
+Information Integration Approaches
+and 
+Architectures
+
+W2 reading: Automatic End-to-End Data Integration using Large Language Models
+
+Acknowledgement: This lecture includes contents from many open sources.
+
+•
+
+•
+
+•
+
+•
+
+•
+
+The central philosophy of IIA
+
+Integration is not merely joining data.
+
+Integration is not merely resolving schemas.
+
+Integration is not merely matching entities.
+
+Integration is the process of constructing defensible knowledge from 
+heterogeneous evidence.
+
+The next generation of integration systems will be semantic, probabilistic, 
+graph-based, multimodal, LLM-assisted, privacy-aware and decision-centric.
+
+The final challenge: What should an intelligent integration system do 
+when it does not know the answer?
+
+THINK DIFFERENTLY
+
+28
+
+Long-Standing Challenges in Information Integration
+
+ Numerous works in the past 30 years
+ In many communities: DB, AI, KDD, Web, Semantic Web
+
+11
+
+Mastering information across the Information Supply Chain
+
+Transactional &  
+Collaborative  
+Applications
+
+Integrate
+
+Manage
+
+Master
+Data
+
+Data
+
+Information  
+Sources
+
+Content
+
+Streaming  
+Information
+
+Data  
+Warehouses
+
+Govern
+
+Analyze
+
+BusinessAnalytics
+Applications
+
+Content  
+Analytics
+
+Big Data
+
+Cubes
+
+Streams
+
+Information  
+Governance
+
+Quality Lifecycle Security
+& Privacy
+
+Standards
+
+Trusted  Relevant  Governed
+
+A unifying architecture
+
+•
+
+Sources: databases • APIs • documents • knowledge graphs • sensors • images.
+
+• Discovery & semantics: profiling • schema matching • ontology alignment • 
+
+embeddings.
+
+•
+
+•
+
+•
+
+Identity: entity resolution • graph evidence • temporal identity.
+
+Evidence: provenance • quality • reliability • uncertainty • truth discovery.
+
+Intelligence: LLMs • RAG • agents • human feedback.
+
+• Outcome: trustworthy integrated information → decisions.
+
+24
+
+Data Querying and Analytics … then and now,  
+a continuous journey: AI & Data Science Perspective
+
+System of Records
+
+System of Insights
+
+System of Engagement
+
+• Multi-modal data mining
+• Data plus rules/ process con-joint 
+
+analytics
+
+• Optimization under uncertainty 
+• AI/NLP/ML/Annotations
+
+• Automation/ Scalability
+• Adaptive and continual analytics
+• Multi-party collaboration
+• NLP/NN/ML/AI/ Deep learning/ Annotations
+Cognitive Analytics
+
+• SQL/Forms/Excel sheets
+• Ad-hoc reporting/Alerts
+• BPM/Workflow
+• Query/Drill-down
+• Relational/Rules
+
+• Data Mining/Workflow
+• Patterns/information discovery
+• Forecasting/ Simulation
+• Straight Through Processing
+• ML/limited text analytics
+
+y
+t
+i
+r
+u
+t
+a
+m
+n
+o
+i
+t
+a
+v
+o
+n
+n
+I
+
+Descriptive Analytics
+(Pure structured data analysis)
+• Addresses What, Who and simple 
+How questions, …
+
+Predictive Analytics
+(structured and unstructured data 
+linkages and analysis)
+• Addresses Why, future trends, 
+complex What questions, …
+
+What will happen? 
+• ML models 
+
+Prescriptive Analytics
+(con-joint structured, big data, 
+unstructured and external data 
+analysis)
+•
+
+Addresses When, complex what-if, 
+future business guidance, …
+
+What should we do? 
+•
+
+Optimization, decision systems 
+
+Dashboards, reporting 
+
+What happened? 
+•
+Why did it happen? 
+•
+
+Root cause analysis 
+
+Data Sources
+
+OLTP, Operational, Internal 
+Application, ERP…
+
+OLAP and DWH
+
+Unstructured, Big Data
+
+Social and Collaboration
+
+Analytics maturity
+
+Cognitive Analytics
+(Derive contextual information from 
+all types of data through reasoning 
+for analysis)
+•
+
+Deep NLP queries, interaction 
+through dialogue, …
+
+Systems that: 
+
+• Understand context 
+• Learn continuously 
+•
+
+Interact (LLMs, agents) 
+
+ 
+Integration Approaches
+
+• Materialized-based
+
+• Extract → Transform → Load into DWH
+• Best for governed BI, historical analytics and repeatable reporting
+
+• Mediation-based: Virtual integration via federated queries
+• Sources  Wrappers  Mediator  Federated Query
+• Best for real-time access and autonomous source systems
+
+• Hybrid: Semantic layer + materialized views
+
+• Useful for enterprise semantic architectures
+
+• Straight Through Processing: Rule-based/Learning-based
+• Event  Rules/ML  Decision  Automated Action
+
+• AI/ML-driven: Use embeddings for schema & entity mapping
+
+• Embeddings  candidate generation  ML/LLM decision  validation
+
+• Context-Oriented: Entity Discovery, enrichment and linkages
+
+• Entity Discovery  Context collection  Enrichment  Linkage  Contextual view
+
+How to compare integration approaches
+
+Four design questions
+• Where does integration happen?
+• When does data become 
+materialized?
+• Where is semantic/identity 
+reasoning performed?
+• What happens when sources 
+change or fail?
+
+Central trade-off
+
+• Latency vs freshness
+• Coupling vs autonomy
+• Control vs flexibility
+• Engineering cost vs integration 
+intelligence
+
+No architecture is universally superior: the application determines the right integration strategy.
+
+2
+
+The recurring business-value framework
+
+• Accuracy — Did we get the right answer?
+
+• Completeness — Did we integrate the necessary evidence?
+
+• Trust — Can we explain and defend the answer?
+
+• Cost — Is the integration economically worthwhile?
+
+• Decision value — Did integration improve an outcome?
+
+Which of these five dimensions should dominate when they conflict?
+
+THINK DIFFERENTLY
+
+Clue: There is no universal answer; the application determines the utility function.
+
+24
+
+1. ETL / ELT — materialized integration
+
+Sources
+ERP • CRM 
+• CSV • APIs
+
+→
+
+Extract
+Batch / CDC
+
+Transform
+Clean • map 
+→
+• join
+
+→
+
+Load
+DWH 
+
+→
+
+Serve
+BI • analytics 
+• ML
+
+Best-suited IIA applications
+• Enterprise BI and reporting
+
+• Regulatory / historical 
+reporting
+
+• Stable analytical workloads
+
+• Cross-source aggregates
+
+Key trade-offs
+
+• Pipeline latency
+
+• Brittle transformation logic
+
+• Schema changes propagate
+
+• Storage duplication
+
+Design principle
+• Materialize integrated data 
+when repeatable analytics 
+and governed history matter 
+most.
+
+3
+
+Materialization Approach
+
+Single Viewof  
+Researcher
+
+Researcher’s  interest
+evolution
+
+Researcher  Value
+estimation
+
+Applications
+
+Query/Analytics  
+Distribution
+
+Context Builder
+
+Query Interface
+
+DWH
+Integrated  Master Data
+
+Datacorrelation
+&De-dup
+
+Standardization
+
+Entity Matching
+
+Duplicatedetection
+
+Infrastructure
+for enablingsmart  data 
+use and  analysis
+
+Data Noise&  
+Format handling
+
+Data cleansing  and
+
+normalization
+
+XMLprocessing  at 
+largescales
+
+Information  
+Extraction
+
+Citations/  
+DBLPDB
+
+<DBLPData/>
+
+PatentDB
+
+II Architecture: A Data Warehousing Approach
+
+2. Mediation / Federated Virtual Integration
+
+Sources
+Independent 
+DBs / APIs
+
+→
+
+Wrappers
+Adapters / 
+connectors
+
+→
+
+Mediator
+Global schema + 
+planner
+
+→
+
+Federated query
+Decompose + 
+execute
+
+→
+
+Answer
+Virtual result
+
+Best-suited IIA applications
+• Real-time operational views
+
+• Autonomous systems
+
+• Avoiding data copies
+
+• Ad-hoc cross-system queries
+
+Key trade-offs
+
+• Runtime latency
+
+• Source availability 
+dependency
+
+• Complex query planning
+
+• Cross-source consistency
+
+Design principle
+
+• Keep data at the source; 
+integrate at query time.
+
+Virtual integration favours freshness and source autonomy over predictable performance.
+
+5
+
+II Architecture: Virtualization Layer Approach
+
+Workflow: 
+Query → decomposition → wrapper invocation → integration
+
+Integration for creating a single site to search for jobs/rentals/…
+
+Integration through (sub-)query federation (Mediator Approach)
+
+Single Viewof  
+Researcher
+
+Researcher’s  interest
+evolution
+
+Researcher  Value
+estimation
+
+Applications
+
+Query/Analytics  
+Distribution
+
+Context Builder
+
+Query
+Interface
+
+Query Decomposer
+and Optimizer
+
+Datacorrelation
+&De-dup
+
+Standardization
+
+Entity Matching
+
+Duplicatedetection
+
+Infrastructure
+for enablingsmart  
+data use and  analysis
+
+Data Noise&  
+Format handling
+
+Data cleansing  and
+
+normalization
+
+XMLprocessing  at 
+largescales
+
+Information  
+Extraction
+
+Citations/  
+DBLPDB
+
+<DBLPData/>
+
+PatentDB
+
+3. Hybrid — Semantic Layer + Materialized Views
+
+Sources
+Operational 
+systems
+
+→
+
+Semantic layer
+Canonical 
+concepts + 
+mappings
+
+→
+
+Materialized 
+views
+Hot / common 
+queries
+
+→
+
+Virtual access
+Long-tail 
+queries
+
+→
+
+Consumers
+BI • apps • AI
+
+Best-suited IIA applications
+• Enterprise semantic layers
+
+• Mixed freshness 
+workloads
+
+• Self-service analytics
+
+• RAG/AI with curated 
+context
+
+Key trade-offs
+
+• More architectural 
+complexity
+
+• Two execution paths
+
+• View staleness
+
+• Semantic mappings 
+are critical
+
+Design principle
+• Materialize what is 
+common and expensive; 
+virtualize what is volatile 
+or rarely queried.
+
+Hybrid is often the practical enterprise compromise between ETL and federation.
+
+7
+
+4. Straight-Through Processing (STP)
+
+Event / record
+Transaction • 
+message • 
+stream
+
+→
+
+Rules
+Deterministic 
+mapping / 
+validation
+
+→
+
+Decision
+Route • enrich 
+• accept
+
+→
+
+Learning
+Optional 
+classifier / 
+model
+
+→
+
+Action
+Process 
+automatically
+
+Best-suited IIA applications
+• Real-time operational 
+integration
+
+Key trade-offs
+
+• Rule explosion
+
+• Order-to-cash workflows
+
+• False positives/negatives
+
+• Fraud / eligibility pre-
+screening
+
+• Event processing
+
+• Model drift
+
+• Human exception handling
+
+Design principle
+
+• Automate the 
+common path; route 
+uncertainty to human 
+review or richer 
+reasoning.
+
+STP is a processing strategy: rules, ML, or both can implement it.
+
+9
+
+Event based Information Integration for STP
+
+Purpose: Real-time integration without manual steps
+
+Business  
+Logic/Process
+
+Integration Hub
+
+Active Functionalities
+
+Feedback
+
+•
+
+Many applications that require a 
+more proactive approach –
+Integration triggered by events
+
+•
+
+•
+
+If the sales of a toy in the 
+different regions are less than 
+100  units by 2 PM, give a 
+discount of 10%
+
+Useful for making timely business
+decisions
+
+Adaptor
+
+Monitor
+
+Adaptor
+
+Adaptor
+
+Monitor
+
+Monitor
+
+Adaptor
+
+Monitor
+
+Connectors
+
+DB
+
+Web
+
+Data  
+Stream
+
+MDB
+
+Data Sources
+
+Data Finds Data: Entity relationship discovery
+
+Where does he live ?
+
+Who is associated to
+him?
+
+International visitor 
+gave address as 
+Australia contact 
+
+Bob Smyth
+Manish Deshraj
+
+Give me records on him?
+
+Alert me based on 
+events of interest 
+around him
+
+Tracker
+
+Mogd Yokub Thapa
+
+Challenges
+
+Rangaga St
+Wamana, MTW
+
+PolNet (photos)
+
+Passport
+
+Driving License
+
+Single/federated View
+
+Vehicle Registration
+
+• Visited Afganistan
+in last 3 months
+•
+Seen in Rally
+
+Electoral Rolls
+
+Water Meter
+
+Mobile Phones
+
+Immigration  
+Records
+
+FIR Data
+
+Bank Transactions
+
+Information extraction
+
+• Data collection and maintenance (with data quality)
+•
+• Multi-modal data integration
+• Entity Matching (with privacy preserving)
+•
+
+Integrated Analysis and Intelligence
+
+5. AI/ML-driven Integration — embeddings + models
+
+Sources
+Schemas • 
+records • text
+
+Representation
+Embeddings / 
+→
+features
+
+→
+
+Candidate 
+generation
+Semantic 
+similarity
+
+→
+
+Decision
+ML / LLM + 
+evidence
+
+→
+
+Outcome
+Accept • 
+review • learn
+
+Best-suited IIA applications
+• Schema matching
+
+• Entity resolution
+
+• Document/multimodal 
+integration
+
+• Poorly documented data
+
+Key trade-offs
+
+• Similarity ≠ equivalence
+
+• Bias and drift
+
+• Explainability challenges
+
+• False matches propagate
+
+Design principle
+• Use embeddings to 
+generate candidates; use 
+evidence, constraints 
+and validation to make 
+decisions.
+
+AI is strongest where semantic variation is high and deterministic rules alone are insufficient.
+
+11
+
+Integration for Single truth --
+
+Rahul K Sharma 
+55 Firoza Link Road  
+537-27-6402  
+XX/0001133107
+
+Proud owner of a  
+santro XL
+
+Linked-In
+
+Twitter
+
+Rahul Kumar Sharma 
+55 Firoza Link Road  
+(022) 9311234590
+537-27-6402
+
+CEO: KP Technologies  
+Member of IEEE
+
+Mobile Phone
+R Sharma
+55 Firoza Link Road  
+(022) 9311234590
+537-27-6402
+XX/0001133107
+
+Landline Phone 
+Rahul K Sharma  
+DOB: 06/17/1934  
+(022) 7314-5577
+
+1
+
+Extended View
+
+Satellite TV
+Rahul Kumar Sharma  
+55 Link Road
+(022) 7314-5577
+XX/1133107
+
+Rahul K Sharma 
+55 Firoza Link Road  
+(022) 9311234590
+537-27-6402
+XX/0001133107
+
+-- CEO: KP Technologies  
+Member of IEEE
+-- Vehicle Owned: Santro X
+
+‘Text + Data’ Integration
+
+ The raw data to insight pipeline
+
+is there any  
+correlation  
+between  
+location and  
+revenue?
+
+Data  
+analysis
+
+Data integration, data wrangling, …
+
+6. Context-Oriented Integration
+
+Entity 
+discovery
+Find candidates
+
+→
+
+Context 
+collection
+Events • docs • 
+relationships
+
+→
+
+Enrichment
+Add attributes 
+/ evidence
+
+→
+
+Linkage
+Connect 
+entities
+
+→
+
+Contextual 
+view
+Entity-centric 
+knowledge
+
+Best-suited IIA 
+applications
+
+• Customer 360
+
+• Knowledge graphs
+
+• Researcher/product 
+discovery
+
+• Recommendations
+
+Key trade-offs
+
+• Context changes
+
+• Entity-centric complexity
+
+• Evidence quality varies
+
+• Strong provenance 
+needed
+
+Design principle
+• Integrate around the 
+entity and its context—
+not merely around 
+source schemas.
+
+Context-oriented integration is a natural architecture for KG-style applications.
+
+13
+
+Information Integration in Google search --
+
+Building Data Driven Artifacts
+
+Integration of Structured Query Results with Unstructured Data
+
+And related 
+documents
+
+“Get the 3 companies with 
+max price variation”
+
+(Keywords not required)
+
+RDBMS
+
+SELECT name, max(price) - min(price)
+FROM stocks
+GROUP BY name
+ORDER BY 2
+FETCH FIRST 3 ROWS ONLY
+
+“Doctype:Patents”
+(optional directive)
+
+SCORE
+
+“IBM” “ORCL” “MSFT” 
+“Database” “Data Cloud 
+Services”
+“Doctype:Patents”
+
+Search Engine
+
+C3C2C1XXYXXYXX87654321BBBABAAAC3C2C1XXYXXYXX87654321BBBABAAAC3C2C1XXYXXYXX87654321BBBABAAAC3C2C1XXYXXYXX87654321BBBABAAASELECT name, max(price) -min(price)FROM stocksGROUP BY nameORDER BY 2FETCH FIRST 3 ROWS ONLYIntegrating Unstructured Documents with Structured Data
+
+I am  <Name> Bharat Kumar </Name> 
+….
+…… bought a 
+<Company>Sony</Company>
+<product>  DVD player </product>
+…. 
+from <Company>JK Electronics 
+</Company> ……..
+
+Additional
+“sidebar”
+information available
+as a result of
+the
+annotation
+
+CustId
+
+StoreId
+
+Payment
+
+Discount
+
+Terms
+
+A756K9
+
+S8976
+
+Card (AMEX)
+
+Promo# 1236
+
+NOREFND
+
+CustId
+
+A756K9
+
+Name
+
+Bharat 
+Kumar
+
+Loyalty
+
+Platinum
+
+Club
+
+Royal
+
+Addr
+
+Okhla Phase 3, 
+New Delhi
+
+TRANSACTIONCUSTOMERSTORETRANSPRODPRODUCTMANUFACTURERTRANSACTIONCUSTOMERSTORETRANSPRODPRODUCTMANUFACTURERC3C2C1XXYXXYXX87654321BBBABAAAC3C2C1XXYXXYXX87654321BBBABAAAC3C2C1XXYXXYXX87654321BBBABAAAC3C2C1XXYXXYXX87654321BBBABAAAIntegrating Real-time Audio with Databases
+
+Architecture selection matrix
+
+Best fit
+
+• ETL/DWH → governed BI, historical 
+analytics
+
+• Mediation → real-time federation
+
+• Hybrid → semantic layer + mixed 
+workloads
+
+• STP → operational workflows
+
+• AI/ML → ambiguous schemas/entities
+
+• Context-oriented → discovery, KG, 360°
+intelligence
+
+Selection criteria
+
+• Freshness
+
+• Query complexity
+
+• Source autonomy
+
+• Volume / latency
+
+• Semantic ambiguity
+
+• Provenance needs
+
+• Tolerance for duplicated storage
+
+Choose architecture based on application requirements, not technology fashion.
+
+15
+
+Classroom exercise — choose the architecture for your application
+
+Scenario
+• Hospital needs a current patient 
+view
+• Autonomous clinical systems
+• 7 years of historical analytics
+• Some identities are ambiguous
+• Doctors need live medication 
+status
+
+Ask students
+• Which parts use ETL?
+• Which parts use federation?
+• Where is entity resolution?
+• Would a semantic layer help?
+• Where is AI appropriate?
+• What should be materialized?
+
+Do not accept “one architecture for everything.” Require justification for 
+every boundary.
+
+17
+
+Think and then answer w.r.t. your application
+
+Think differently
+
+• If an embedding says two entities are 
+97% similar, should they be merged?
+
+• If a virtual query is always slow, when 
+should it become materialized?
+
+• If the semantic layer is wrong, can 
+downstream applications be correct?
+
+• Can context itself become the 
+integration key?
+
+Research directions
+
+• Adaptive integration architectures
+
+• LLM-assisted schema/ontology evolution
+
+• Learning-based query federation
+
+• Context-aware entity resolution
+
+• Self-healing integration
+
+• Provenance-aware AI integration
+
+Ultimate question: Can an integration architecture dynamically decide how 
+and where to integrate each piece of information?
+
+18
+
+Key Challenges
+
+1. Understand the data — schemas, semantics, ontologies, context, curation.
+
+2.
+
+Schema and Data heterogeneity, and Automated data transformations —
+schema mapping, data mapping, information discovery.
+
+• Uniform (or source specific) query access to data sources
+• Distributed query processing and optimization
+• Consolidating, transforming, and mining data for analysis.
+
+3. Determine identity and truth — entity resolution, record linkage, graph 
+
+evidence, uncertainty, provenance, fusion.
+
+4. Build intelligent integration — graphs, multimodal data, LLMs, RAG, agents.
+
+• Reduce the effort needed to set up an data curation, integration tasks.
+• Enable the system to perform gracefully with uncertainty (e.g., on the  web/noisy 
+
+source/…)
+
+5. Make integration useful — active learning, fairness, self-healing, decision 
+
+3
+
+intelligence.
+
+

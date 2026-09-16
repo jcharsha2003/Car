@@ -1,0 +1,460 @@
+"""
+Integration View API Routes
+
+These routes expose the Information Integration layer itself:
+- Schema information from all sources
+- GAV schema mappings
+- Schema matching results
+- Dashboard statistics
+- SQL Query execution (SELECT only) across all 5 DBs
+"""
+import sqlite3
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from ..integration.mediator import Mediator
+from ..integration.schema_mapper import SchemaMapper, GAV_MAPPING
+from ..integration.schema_matcher import SchemaMatcher, sample_column_values, compute_multisignal_similarity
+from ..integration.source_registry import get_registry
+from ..config import DB_CAPTURE, DB_INSURANCE, DB_REGISTRATION, DB_THEFT, DB_MINISTRY
+
+router = APIRouter(prefix="/api", tags=["integration"])
+
+_mediator: Optional[Mediator] = None
+_schema_mapper = SchemaMapper()
+_schema_matcher = SchemaMatcher()
+
+# ─── SQL Query Models ────────────────────────────────────────────────────────
+
+class SqlQueryRequest(BaseModel):
+    query: str
+    database: str = "all"   # all | capture | insurance | registration | theft | ministry
+
+
+
+def get_mediator() -> Mediator:
+    global _mediator
+    if _mediator is None:
+        _mediator = Mediator()
+    return _mediator
+
+
+@router.get("/data-sources")
+async def get_data_sources():
+    """
+    Get schema information from all 5 independent data sources.
+    Used for the Data Sources page in the frontend.
+    """
+    mediator = get_mediator()
+    schema_info = mediator.get_schema_info()
+
+    # Enrich with schema mapping information
+    sources_info = []
+    source_descriptions = {
+        "capture": {
+            "purpose": "Traffic surveillance ANPR camera system. Records vehicles detected on the road.",
+            "local_key": "plate_number",
+            "global_key": "registration_number",
+            "organization": "Traffic Surveillance Department",
+        },
+        "insurance": {
+            "purpose": "Insurance company policy management system. Stores vehicle insurance records.",
+            "local_key": "registration_id",
+            "global_key": "registration_number",
+            "organization": "National Insurance Registry",
+        },
+        "registration": {
+            "purpose": "Government RTO vehicle registration system. Official vehicle registration records.",
+            "local_key": "vehicle_reg_no",
+            "global_key": "registration_number",
+            "organization": "Regional Transport Office (RTO)",
+        },
+        "theft": {
+            "purpose": "Police department vehicle security records. Stolen, recovered, scrapped vehicles.",
+            "local_key": "vehicle_identifier",
+            "global_key": "registration_number",
+            "organization": "Police Crime Records Bureau",
+        },
+        "ministry": {
+            "purpose": "Ministry of Transportation reporting system (SIMULATED ACADEMIC SYSTEM).",
+            "local_key": "vehicle_ref",
+            "global_key": "registration_number",
+            "organization": "Ministry of Transportation (Simulated)",
+        },
+    }
+
+    for source_name, info in schema_info.items():
+        desc = source_descriptions.get(source_name, {})
+        sources_info.append({
+            **info,
+            **desc,
+            "schema_mapping": {
+                "local_key": desc.get("local_key"),
+                "global_key": "registration_number",
+                "mapping_type": "GAV (Global-As-View)",
+            },
+        })
+
+    return {"sources": sources_info, "count": len(sources_info)}
+
+
+@router.get("/integration/schema")
+async def get_integration_schema():
+    """
+    Get the complete GAV schema mapping and multi-signal matching results.
+
+    Runs instance-based matching using real sampled data from each source DB.
+    This demonstrates IIA-3 'Instance-based: Attributes match if they have
+    similar instances or value distributions'.
+    """
+    # GAV mapping table
+    mapping_table = _schema_mapper.get_full_mapping_table()
+
+    source_key_attrs = {
+        "capture": ["plate_number", "detected_vehicle_type", "detected_color", "capture_timestamp",
+                    "capture_location", "detection_confidence", "ocr_confidence"],
+        "insurance": ["registration_id", "insurer_name", "policy_number", "policy_start_date",
+                      "policy_expiry_date", "insurance_status", "vehicle_category"],
+        "registration": ["vehicle_reg_no", "owner_name", "registration_date", "manufacturer",
+                         "model_name", "vehicle_class", "registered_color", "fuel_type", "registration_status"],
+        "theft": ["vehicle_identifier", "case_type", "case_status", "reported_date",
+                  "police_reference", "shredding_status"],
+        "ministry": ["vehicle_ref", "report_type", "report_date", "reason", "severity", "report_status"],
+    }
+
+    # Sample real instance data for instance-based matching (IIA-3)
+    db_configs = {
+        "capture":      (DB_CAPTURE,      "vehicle_capture",          "plate_number"),
+        "insurance":    (DB_INSURANCE,    "insurance_records",         "registration_id"),
+        "registration": (DB_REGISTRATION, "vehicle_registration",      "vehicle_reg_no"),
+        "theft":        (DB_THEFT,        "vehicle_security_records",  "vehicle_identifier"),
+        "ministry":     (DB_MINISTRY,     "transport_reports",         "vehicle_ref"),
+    }
+    instance_data: dict = {}
+    for src, (db_path, table, key_col) in db_configs.items():
+        instance_data[src] = {key_col: sample_column_values(db_path, table, key_col, limit=50)}
+
+    # Run multi-signal matching with real instance data
+    key_correspondences = _schema_matcher.find_key_correspondences(source_key_attrs, instance_data=instance_data)
+    all_correspondences = _schema_matcher.match_all_sources(source_key_attrs)
+
+    return {
+        "gav_mapping": mapping_table,
+        "all_source_keys": _schema_mapper.get_all_source_keys("registration_number"),
+        "key_correspondences": key_correspondences,
+        "all_correspondences": [c for c in all_correspondences if c["similarity"] >= 0.5],
+        "integration_approach": "Mediation / Federated Virtual Integration (IIA-1)",
+        "schema_mapping_approach": "Global-As-View (GAV) (IIA-3)",
+        "matching_model": "Multi-signal: Score = 0.35*N + 0.25*I + 0.20*S + 0.10*C + 0.10*O (IIA-3)",
+        "instance_data_sampled": {src: len(list(v.values())[0]) for src, v in instance_data.items()},
+    }
+
+
+@router.get("/statistics")
+async def get_statistics():
+    """Dashboard statistics aggregated from all sources."""
+    mediator = get_mediator()
+    raw_stats = mediator.get_statistics()
+
+    # Pull structured values from each source
+    capture_stats = raw_stats.get("capture", {})
+    insurance_stats = raw_stats.get("insurance", {})
+    registration_stats = raw_stats.get("registration", {})
+    theft_stats = raw_stats.get("theft", {})
+    ministry_stats = raw_stats.get("ministry", {})
+
+    return {
+        "total_vehicles_captured": capture_stats.get("total", 0),
+        "unique_plates_captured": capture_stats.get("unique_plates", 0),
+        "total_insurance_records": insurance_stats.get("total", 0),
+        "insured_active": insurance_stats.get("active", 0),
+        "insurance_expired": insurance_stats.get("expired", 0),
+        "total_registered": registration_stats.get("total", 0),
+        "total_theft_cases": theft_stats.get("total", 0),
+        "stolen_vehicles": theft_stats.get("stolen", 0),
+        "scrapped_vehicles": theft_stats.get("scrapped", 0),
+        "suspicious_vehicles": theft_stats.get("suspicious", 0),
+        "total_reports": ministry_stats.get("total", 0),
+        "pending_reports": ministry_stats.get("pending", 0),
+        "resolved_reports": ministry_stats.get("resolved", 0),
+        "sources": {
+            "capture": capture_stats,
+            "insurance": insurance_stats,
+            "registration": registration_stats,
+            "theft": theft_stats,
+            "ministry": ministry_stats,
+        },
+    }
+
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "IIA Vehicle Integration System",
+        "version": "1.0.0",
+    }
+
+
+@router.get("/sources/health")
+async def get_sources_health():
+    """
+    Source health dashboard.
+
+    Pings all 5 data sources and returns their health status,
+    availability, response time, and query statistics.
+
+    IIA-3 'Data Source Selection' slide:
+      'Must evaluate data sources to know which to select:
+       Is it complete? Is it correct? Is it up to date?'
+
+    IIA-4 Wrappers slide:
+      'Wrappers communicate with data sources, sending queries,
+       converting replies to a format the query processor can use.'
+
+    Returns:
+      - Online/offline status for each source
+      - Response time (ms) -- query latency per source
+      - Success rate and error rate
+      - Optimal query order (fastest first)
+    """
+    registry = get_registry()
+    ping_results = registry.ping_all_sources()
+    summary = registry.get_health_summary()
+    optimal_order = registry.get_optimal_query_order()
+
+    return {
+        "summary": summary,
+        "ping_results": ping_results,
+        "optimal_query_order": optimal_order,
+        "description": (
+            "Source health monitoring implements the IIA-1 source registry concept. "
+            "The mediator queries fastest available sources first to minimize latency."
+        ),
+    }
+
+
+@router.get("/integration/instance-matching")
+async def get_instance_based_matching():
+    """
+    Instance-based schema matching with real data samples.
+
+    IIA-3: 'Data instances -- Attributes match if they have
+    similar instances or value distributions'
+    IIA-3: 'Instance-based: Distribution similarity (e.g., KL divergence)'
+
+    This endpoint:
+    1. Samples actual data values from each source DB
+    2. Computes value overlap between attribute pairs
+    3. Shows how the I (instance) signal dramatically boosts scores
+       for 'plate_number' vs 'vehicle_ref' etc.
+
+    Without instance data: plate_number vs vehicle_ref linguistic score ~0.18
+    With instance data:    plate_number vs vehicle_ref total score is much higher
+                           because they share the same 10 vehicle plate values.
+    """
+    db_configs = {
+        "capture":      (DB_CAPTURE,      "vehicle_capture",          "plate_number"),
+        "insurance":    (DB_INSURANCE,    "insurance_records",         "registration_id"),
+        "registration": (DB_REGISTRATION, "vehicle_registration",      "vehicle_reg_no"),
+        "theft":        (DB_THEFT,        "vehicle_security_records",  "vehicle_identifier"),
+        "ministry":     (DB_MINISTRY,     "transport_reports",         "vehicle_ref"),
+    }
+
+    # Sample real data from each source's key column
+    sampled: dict = {}
+    for src, (db_path, table, key_col) in db_configs.items():
+        values = sample_column_values(db_path, table, key_col, limit=50)
+        sampled[src] = {"column": key_col, "values": values, "count": len(values)}
+
+    # Run pairwise instance-based matching on the 5 identity columns
+    key_pairs = []
+    src_list = list(db_configs.keys())
+    for i in range(len(src_list)):
+        for j in range(i + 1, len(src_list)):
+            s1, s2 = src_list[i], src_list[j]
+            col1 = db_configs[s1][2]
+            col2 = db_configs[s2][2]
+            vals1 = sampled[s1]["values"]
+            vals2 = sampled[s2]["values"]
+
+            result = compute_multisignal_similarity(
+                col1, col2,
+                instance_values1=vals1,
+                instance_values2=vals2,
+            )
+
+            # Also compute linguistic-only for comparison
+            from ..integration.schema_matcher import compute_attribute_similarity
+            ling_only = compute_attribute_similarity(col1, col2)
+
+            key_pairs.append({
+                "source1": s1, "col1": col1,
+                "source2": s2, "col2": col2,
+                "score_with_instances": result["score"],
+                "score_linguistic_only": ling_only,
+                "improvement": round(result["score"] - ling_only, 4),
+                "signals": result["signals"],
+                "match_type": result["match_type"],
+                "shared_values": list(set(vals1) & set(v.strip().upper() for v in vals2))[:5],
+            })
+
+    return {
+        "description": (
+            "Instance-based matching (IIA-3): Attributes from different sources are matched "
+            "by comparing their actual data values. High overlap proves they represent the same concept "
+            "even when their names differ greatly (e.g., plate_number vs vehicle_ref)."
+        ),
+        "sampled_data": sampled,
+        "pairwise_matching": sorted(key_pairs, key=lambda x: x["score_with_instances"], reverse=True),
+        "algorithm": "Jaccard overlap on sampled value sets as proxy for distribution similarity",
+        "formula": "I_sim = |values1 intersect values2| / |values1 union values2|",
+    }
+
+
+@router.get("/demo-vehicles")
+async def get_demo_vehicles():
+    """Return the list of pre-seeded demo vehicles for the demo page."""
+    return {
+        "demo_vehicles": [
+            {"plate": "UP32AB1234", "expected_status": "INSURED", "description": "Valid, insured vehicle"},
+            {"plate": "UP32CD5678", "expected_status": "INSURANCE_EXPIRED", "description": "Insurance expired"},
+            {"plate": "MH02EF9012", "expected_status": "UNINSURED", "description": "No insurance record"},
+            {"plate": "DL01GH3456", "expected_status": "STOLEN", "description": "Reported stolen"},
+            {"plate": "KA03IJ7890", "expected_status": "SCRAPPED", "description": "Vehicle scrapped"},
+            {"plate": "TN05KL1122", "expected_status": "DATA_CONFLICT", "description": "Color data conflict"},
+            {"plate": "GJ06MN3344", "expected_status": "UNINSURED", "description": "Partial info — no insurance"},
+            {"plate": "RJ07OP5566", "expected_status": "INSURED", "description": "Fuzzy OCR match demo"},
+            {"plate": "HR26PQ7788", "expected_status": "SUSPICIOUS", "description": "Suspicious vehicle"},
+            {"plate": "PB10RS9900", "expected_status": "INSURANCE_EXPIRED", "description": "Cancelled policy"},
+        ]
+    }
+
+
+# ─── SQL Query Endpoints ─────────────────────────────────────────────────────
+
+# Map of database name -> file path
+_DB_MAP: Dict[str, str] = {
+    "capture":      DB_CAPTURE,
+    "insurance":    DB_INSURANCE,
+    "registration": DB_REGISTRATION,
+    "theft":        DB_THEFT,
+    "ministry":     DB_MINISTRY,
+}
+
+
+def _run_select(db_path: str, query: str) -> Dict[str, Any]:
+    """Execute a SELECT query on a SQLite db and return columns + rows."""
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(query)
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+        rows = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return {"columns": columns, "rows": rows, "error": None}
+    except Exception as e:
+        return {"columns": [], "rows": [], "error": str(e)}
+
+
+def _is_safe_query(query: str) -> bool:
+    """Return True only if the query starts with SELECT (read-only check)."""
+    stripped = query.strip().lstrip("(").upper()
+    return stripped.startswith("SELECT") or stripped.startswith("WITH")
+
+
+@router.post("/sql-query")
+async def run_sql_query(request: SqlQueryRequest):
+    """
+    Execute a read-only SQL SELECT query against one or all of the 5 databases.
+
+    Body:
+        { "query": "SELECT * FROM vehicle_capture LIMIT 10", "database": "capture" }
+
+    database can be: all | capture | insurance | registration | theft | ministry
+
+    When database="all", the query is run against each DB independently.
+    Only SELECT / WITH queries are allowed (no INSERT / UPDATE / DELETE).
+    """
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Query cannot be empty.")
+
+    if not _is_safe_query(query):
+        raise HTTPException(
+            status_code=400,
+            detail="Only SELECT queries are allowed. INSERT/UPDATE/DELETE are blocked."
+        )
+
+    target = request.database.lower()
+
+    if target == "all":
+        all_results: List[Dict[str, Any]] = []
+        for db_name, db_path in _DB_MAP.items():
+            result = _run_select(db_path, query)
+            all_results.append({
+                "database": db_name,
+                "columns": result["columns"],
+                "rows": result["rows"],
+                "row_count": len(result["rows"]),
+                "error": result["error"],
+            })
+        return {
+            "query": query,
+            "database": "all",
+            "results": all_results,
+            "total_rows": sum(r["row_count"] for r in all_results),
+        }
+
+    if target not in _DB_MAP:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown database '{target}'. Choose: all, {', '.join(_DB_MAP.keys())}"
+        )
+
+    result = _run_select(_DB_MAP[target], query)
+    return {
+        "query": query,
+        "database": target,
+        "results": [{
+            "database": target,
+            "columns": result["columns"],
+            "rows": result["rows"],
+            "row_count": len(result["rows"]),
+            "error": result["error"],
+        }],
+        "total_rows": len(result["rows"]),
+    }
+
+
+@router.get("/sql-query/tables")
+async def get_all_table_schemas():
+    """
+    Return the full schema (tables + columns) of all 5 databases.
+    Used by the SQL Query page to show available tables as hints.
+    """
+    schema: Dict[str, Any] = {}
+
+    for db_name, db_path in _DB_MAP.items():
+        try:
+            conn = sqlite3.connect(db_path)
+            tables_cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+            tables = [row[0] for row in tables_cursor.fetchall()]
+            db_schema: Dict[str, List] = {}
+            for table in tables:
+                col_cursor = conn.execute(f"PRAGMA table_info({table})")
+                columns = [
+                    {"name": row[1], "type": row[2], "pk": bool(row[5])}
+                    for row in col_cursor.fetchall()
+                ]
+                db_schema[table] = columns
+            conn.close()
+            schema[db_name] = {"db_file": db_path, "tables": db_schema}
+        except Exception as e:
+            schema[db_name] = {"error": str(e), "tables": {}}
+
+    return {"databases": schema, "count": len(schema)}
