@@ -62,20 +62,36 @@ interface SchemaDB {
   error?: string;
 }
 
+interface WriteResult {
+  success: boolean;
+  database: string;
+  owner: string;
+  affected_rows: number;
+  last_insert_id: number | null;
+  error?: string;
+  forwarded_to?: string;
+}
+
 export default function SqlQueryPage() {
   const [query, setQuery] = useState(EXAMPLE_QUERIES[0].query);
   const [database, setDatabase] = useState('capture');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ResultSet[] | null>(null);
+  const [writeResult, setWriteResult] = useState<WriteResult | null>(null);
   const [totalRows, setTotalRows] = useState(0);
   const [error, setError] = useState('');
   const [schema, setSchema] = useState<Record<string, SchemaDB> | null>(null);
   const [schemaOpen, setSchemaOpen] = useState(false);
+  const [writeMode, setWriteMode] = useState(false);
+  const [ownership, setOwnership] = useState<Record<string, {owner: string, node: string, writable_here: boolean}> | null>(null);
 
   useEffect(() => {
     api.getSqlTables()
       .then(data => setSchema(data.databases))
       .catch(() => setSchema(null));
+    api.getDbOwnership()
+      .then(data => setOwnership(data.databases))
+      .catch(() => setOwnership(null));
   }, []);
 
   const runQuery = async () => {
@@ -83,14 +99,20 @@ export default function SqlQueryPage() {
     setLoading(true);
     setError('');
     setResults(null);
+    setWriteResult(null);
     try {
-      const data = await api.sqlQuery(query, database);
-      setResults(data.results);
-      // Only count rows from DBs that actually had the table (ignore 'no such table' errors)
-      const successfulRows = (data.results as ResultSet[])
-        .filter(r => !r.error?.includes('no such table'))
-        .reduce((sum: number, r: ResultSet) => sum + r.row_count, 0);
-      setTotalRows(successfulRows);
+      if (writeMode) {
+        if (database === 'all') throw new Error("Please select a specific database for write operations.");
+        const data = await api.sqlWrite(query, database);
+        setWriteResult(data);
+      } else {
+        const data = await api.sqlQuery(query, database);
+        setResults(data.results);
+        const successfulRows = (data.results as ResultSet[])
+          .filter(r => !r.error?.includes('no such table'))
+          .reduce((sum: number, r: ResultSet) => sum + r.row_count, 0);
+        setTotalRows(successfulRows);
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Query failed');
     } finally {
@@ -102,7 +124,9 @@ export default function SqlQueryPage() {
     setQuery(ex.query);
     setDatabase(ex.db);
     setResults(null);
+    setWriteResult(null);
     setError('');
+    setWriteMode(false);
   };
 
   const dbColor = DB_OPTIONS.find(d => d.value === database)?.color ?? '#a78bfa';
@@ -127,34 +151,78 @@ export default function SqlQueryPage() {
             borderRadius: 14,
             padding: '16px 20px',
           }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, fontWeight: 600, letterSpacing: '0.05em' }}>
-              SELECT DATABASE
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {DB_OPTIONS.map(opt => (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em' }}>
+                SELECT DATABASE
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, color: writeMode ? 'var(--text-muted)' : '#38bdf8', fontWeight: writeMode ? 400 : 700 }}>READ</span>
                 <button
-                  key={opt.value}
-                  onClick={() => setDatabase(opt.value)}
+                  onClick={() => {
+                    const newMode = !writeMode;
+                    setWriteMode(newMode);
+                    if (newMode && database === 'all') setDatabase('capture');
+                    setResults(null);
+                    setWriteResult(null);
+                  }}
                   style={{
-                    padding: '6px 14px',
-                    borderRadius: 20,
-                    border: database === opt.value
-                      ? `2px solid ${opt.color}`
-                      : '2px solid var(--color-border)',
-                    background: database === opt.value
-                      ? `${opt.color}22`
-                      : 'var(--color-surface-2)',
-                    color: database === opt.value ? opt.color : 'var(--text-muted)',
-                    fontSize: 13,
-                    fontWeight: database === opt.value ? 700 : 400,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
+                    width: 40, height: 20, borderRadius: 10, background: writeMode ? '#f87171' : 'var(--color-surface-3)',
+                    border: 'none', position: 'relative', cursor: 'pointer', transition: 'background 0.2s'
                   }}
                 >
-                  {opt.label}
+                  <div style={{
+                    width: 16, height: 16, borderRadius: '50%', background: 'white',
+                    position: 'absolute', top: 2, left: writeMode ? 22 : 2, transition: 'left 0.2s'
+                  }} />
                 </button>
-              ))}
+                <span style={{ fontSize: 12, color: writeMode ? '#f87171' : 'var(--text-muted)', fontWeight: writeMode ? 700 : 400 }}>WRITE</span>
+              </div>
             </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {DB_OPTIONS.map(opt => {
+                if (writeMode && opt.value === 'all') return null;
+                const dbOwner = ownership?.[opt.value];
+                const isRemote = writeMode && dbOwner && !dbOwner.writable_here;
+                
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setDatabase(opt.value)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 20,
+                      border: database === opt.value
+                        ? `2px solid ${opt.color}`
+                        : '2px solid var(--color-border)',
+                      background: database === opt.value
+                        ? `${opt.color}22`
+                        : 'var(--color-surface-2)',
+                      color: database === opt.value ? opt.color : 'var(--text-muted)',
+                      fontSize: 13,
+                      fontWeight: database === opt.value ? 700 : 400,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                  >
+                    {opt.label}
+                    {isRemote && <span title={`Owned by ${dbOwner.owner}`}>🔒</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {writeMode && ownership?.[database] && !ownership[database].writable_here && (
+              <div style={{ marginTop: 12, fontSize: 12, color: '#f87171', background: '#f8717122', padding: '8px 12px', borderRadius: 8 }}>
+                ℹ️ <strong>Remote Database:</strong> This database belongs to <strong>{ownership[database].owner}</strong>. Writes will be federated over HTTP.
+              </div>
+            )}
+            {writeMode && ownership?.[database] && ownership[database].writable_here && (
+              <div style={{ marginTop: 12, fontSize: 12, color: '#34d399', background: '#34d39922', padding: '8px 12px', borderRadius: 8 }}>
+                ✅ <strong>Local Database:</strong> This database is owned by this laptop.
+              </div>
+            )}
           </div>
 
           {/* SQL Editor */}
@@ -175,7 +243,7 @@ export default function SqlQueryPage() {
               <span style={{ fontSize: 12, fontWeight: 700, color: dbColor, letterSpacing: '0.05em' }}>
                 SQL EDITOR — {database.toUpperCase()} DATABASE
               </span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>SELECT only</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{writeMode ? 'INSERT / UPDATE / DELETE' : 'SELECT only'}</span>
             </div>
             <textarea
               id="sql-query-input"
@@ -196,7 +264,7 @@ export default function SqlQueryPage() {
                 resize: 'vertical',
                 boxSizing: 'border-box',
               }}
-              placeholder="SELECT * FROM vehicle_capture LIMIT 10"
+              placeholder={writeMode ? "INSERT INTO vehicle_capture (plate_number) VALUES ('UP32AB1234')" : "SELECT * FROM vehicle_capture LIMIT 10"}
               onKeyDown={e => {
                 // Ctrl+Enter / Cmd+Enter to run
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -365,6 +433,49 @@ export default function SqlQueryPage() {
       {/* Loading */}
       {loading && (
         <div className="loading-center"><div className="spinner" /><span>Executing query…</span></div>
+      )}
+
+      {/* Write Result */}
+      {writeResult && !loading && (
+        <div style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-success)',
+          borderRadius: 14,
+          padding: 20,
+          marginBottom: 20,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--color-success)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 18 }}>
+              ✓
+            </div>
+            <h3 style={{ margin: 0, color: 'var(--color-success)' }}>Query Executed Successfully</h3>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, background: 'var(--color-surface-2)', padding: 16, borderRadius: 8 }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, letterSpacing: '0.05em' }}>DATABASE</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{writeResult.database.toUpperCase()}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, letterSpacing: '0.05em' }}>EXECUTED BY</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{writeResult.owner}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, letterSpacing: '0.05em' }}>AFFECTED ROWS</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{writeResult.affected_rows}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, letterSpacing: '0.05em' }}>LAST INSERT ID</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{writeResult.last_insert_id || 'N/A'}</div>
+            </div>
+          </div>
+          
+          {writeResult.forwarded_to && (
+            <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>📡</span> Request was forwarded to node at {writeResult.forwarded_to}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Results */}

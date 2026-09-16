@@ -6,9 +6,13 @@ These routes expose the Information Integration layer itself:
 - GAV schema mappings
 - Schema matching results
 - Dashboard statistics
-- SQL Query execution (SELECT only) across all 5 DBs
+- SQL Query execution across all 5 DBs
+  * SELECT: federated across all nodes
+  * INSERT/UPDATE/DELETE: local DBs only (capture on master)
+  * Remote writes must be done on the owning laptop
 """
 import sqlite3
+import requests
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -17,7 +21,10 @@ from ..integration.mediator import Mediator
 from ..integration.schema_mapper import SchemaMapper, GAV_MAPPING
 from ..integration.schema_matcher import SchemaMatcher, sample_column_values, compute_multisignal_similarity
 from ..integration.source_registry import get_registry
-from ..config import DB_CAPTURE, DB_INSURANCE, DB_REGISTRATION, DB_THEFT, DB_MINISTRY
+from ..config import (
+    DB_CAPTURE, DB_INSURANCE, DB_REGISTRATION, DB_THEFT, DB_MINISTRY,
+    LOCAL_DATABASES, DATABASE_NODE_MAP, NODE_URLS
+)
 
 router = APIRouter(prefix="/api", tags=["integration"])
 
@@ -31,7 +38,9 @@ class SqlQueryRequest(BaseModel):
     query: str
     database: str = "all"   # all | capture | insurance | registration | theft | ministry
 
-
+class SqlWriteRequest(BaseModel):
+    query: str
+    database: str  # capture | insurance | registration | theft | ministry (not 'all')
 
 def get_mediator() -> Mediator:
     global _mediator
@@ -335,7 +344,7 @@ async def get_demo_vehicles():
 
 # ─── SQL Query Endpoints ─────────────────────────────────────────────────────
 
-# Map of database name -> file path
+# Map of database name -> file path (local SQLite files — master owns capture only)
 _DB_MAP: Dict[str, str] = {
     "capture":      DB_CAPTURE,
     "insurance":    DB_INSURANCE,
@@ -344,9 +353,18 @@ _DB_MAP: Dict[str, str] = {
     "ministry":     DB_MINISTRY,
 }
 
+# DB ownership labels for UI display
+DB_OWNERSHIP = {
+    "capture":      {"owner": "Master Laptop",  "node": "master", "writable_here": True},
+    "insurance":    {"owner": "Laptop B",        "node": "node_b", "writable_here": False},
+    "registration": {"owner": "Laptop B",        "node": "node_b", "writable_here": False},
+    "theft":        {"owner": "Laptop C",        "node": "node_c", "writable_here": False},
+    "ministry":     {"owner": "Laptop C",        "node": "node_c", "writable_here": False},
+}
+
 
 def _run_select(db_path: str, query: str) -> Dict[str, Any]:
-    """Execute a SELECT query on a SQLite db and return columns + rows."""
+    """Execute a SELECT query on a local SQLite db and return columns + rows."""
     try:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
@@ -359,24 +377,58 @@ def _run_select(db_path: str, query: str) -> Dict[str, Any]:
         return {"columns": [], "rows": [], "error": str(e)}
 
 
+def _run_select_remote(node_url: str, query: str, db_name: str) -> Dict[str, Any]:
+    """Forward a SELECT query to a remote node."""
+    try:
+        resp = requests.post(
+            f"{node_url}/api/node/sql-query",
+            json={"query": query, "database": db_name},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        return {"columns": [], "rows": [], "error": f"Node returned HTTP {resp.status_code}"}
+    except Exception as e:
+        return {"columns": [], "rows": [], "error": f"Node unreachable: {e}"}
+
+
+def _run_write_local(db_path: str, query: str) -> Dict[str, Any]:
+    """Execute an INSERT/UPDATE/DELETE on a local SQLite db."""
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute(query)
+        conn.commit()
+        affected = cursor.rowcount
+        lastrowid = cursor.lastrowid
+        conn.close()
+        return {"success": True, "affected_rows": affected, "last_insert_id": lastrowid, "error": None}
+    except Exception as e:
+        return {"success": False, "affected_rows": 0, "last_insert_id": None, "error": str(e)}
+
+
 def _is_safe_query(query: str) -> bool:
-    """Return True only if the query starts with SELECT (read-only check)."""
+    """Return True only if query starts with SELECT."""
     stripped = query.strip().lstrip("(").upper()
     return stripped.startswith("SELECT") or stripped.startswith("WITH")
+
+
+def _is_write_query(query: str) -> bool:
+    """Return True for INSERT / UPDATE / DELETE / REPLACE queries."""
+    stripped = query.strip().lstrip("(").upper()
+    return any(stripped.startswith(kw) for kw in ("INSERT", "UPDATE", "DELETE", "REPLACE"))
 
 
 @router.post("/sql-query")
 async def run_sql_query(request: SqlQueryRequest):
     """
-    Execute a read-only SQL SELECT query against one or all of the 5 databases.
+    Execute a SQL SELECT query against one or all of the 5 databases.
+    SELECT queries are federated: local DBs run directly, remote DBs are
+    forwarded to the correct node via HTTP.
 
     Body:
         { "query": "SELECT * FROM vehicle_capture LIMIT 10", "database": "capture" }
 
     database can be: all | capture | insurance | registration | theft | ministry
-
-    When database="all", the query is run against each DB independently.
-    Only SELECT / WITH queries are allowed (no INSERT / UPDATE / DELETE).
     """
     query = request.query.strip()
     if not query:
@@ -385,22 +437,28 @@ async def run_sql_query(request: SqlQueryRequest):
     if not _is_safe_query(query):
         raise HTTPException(
             status_code=400,
-            detail="Only SELECT queries are allowed. INSERT/UPDATE/DELETE are blocked."
+            detail="Only SELECT queries are allowed here. Use /api/sql-write for INSERT/UPDATE/DELETE."
         )
 
     target = request.database.lower()
 
+    def _run_db(db_name: str) -> Dict[str, Any]:
+        node_key = DATABASE_NODE_MAP.get(db_name, "master")
+        if node_key == "master":
+            result = _run_select(_DB_MAP[db_name], query)
+        else:
+            node_url = NODE_URLS[node_key]
+            result = _run_select_remote(node_url, query, db_name)
+        return {
+            "database": db_name,
+            "columns": result.get("columns", []),
+            "rows": result.get("rows", []),
+            "row_count": len(result.get("rows", [])),
+            "error": result.get("error"),
+        }
+
     if target == "all":
-        all_results: List[Dict[str, Any]] = []
-        for db_name, db_path in _DB_MAP.items():
-            result = _run_select(db_path, query)
-            all_results.append({
-                "database": db_name,
-                "columns": result["columns"],
-                "rows": result["rows"],
-                "row_count": len(result["rows"]),
-                "error": result["error"],
-            })
+        all_results = [_run_db(db_name) for db_name in _DB_MAP]
         return {
             "query": query,
             "database": "all",
@@ -414,19 +472,105 @@ async def run_sql_query(request: SqlQueryRequest):
             detail=f"Unknown database '{target}'. Choose: all, {', '.join(_DB_MAP.keys())}"
         )
 
-    result = _run_select(_DB_MAP[target], query)
+    result_item = _run_db(target)
     return {
         "query": query,
         "database": target,
-        "results": [{
-            "database": target,
-            "columns": result["columns"],
-            "rows": result["rows"],
-            "row_count": len(result["rows"]),
-            "error": result["error"],
-        }],
-        "total_rows": len(result["rows"]),
+        "results": [result_item],
+        "total_rows": result_item["row_count"],
     }
+
+
+@router.post("/sql-write")
+async def run_sql_write(request: SqlWriteRequest):
+    """
+    Execute an INSERT / UPDATE / DELETE query.
+
+    ISOLATION RULE — each database can only be written from the laptop that owns it:
+      Master  → capture
+      Laptop B → insurance, registration
+      Laptop C → theft, ministry
+
+    If this master receives a write request for a remote DB, it forwards
+    the query to the correct node backend via HTTP.
+
+    Body:
+        { "query": "INSERT INTO vehicle_capture ...", "database": "capture" }
+    """
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Query cannot be empty.")
+
+    if not _is_write_query(query):
+        raise HTTPException(
+            status_code=400,
+            detail="Only INSERT/UPDATE/DELETE queries are allowed here. Use /api/sql-query for SELECT."
+        )
+
+    target = request.database.lower()
+    if target not in _DB_MAP or target == "all":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Specify a single database: {', '.join(_DB_MAP.keys())}"
+        )
+
+    node_key = DATABASE_NODE_MAP.get(target, "master")
+    ownership = DB_OWNERSHIP.get(target, {})
+
+    if node_key == "master":
+        # This DB is local — write directly
+        result = _run_write_local(_DB_MAP[target], query)
+        if result["error"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+        return {
+            "success": True,
+            "database": target,
+            "owner": "Master Laptop",
+            "affected_rows": result["affected_rows"],
+            "last_insert_id": result["last_insert_id"],
+        }
+    else:
+        # Forward to remote node
+        node_url = NODE_URLS[node_key]
+        try:
+            resp = requests.post(
+                f"{node_url}/api/node/sql-write",
+                json={"query": query, "database": target},
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                data["forwarded_to"] = node_url
+                data["owner"] = ownership.get("owner", node_key)
+                return data
+            detail = resp.json().get("detail", resp.text) if resp.content else resp.text
+            raise HTTPException(status_code=resp.status_code, detail=f"Node error: {detail}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"Cannot reach {ownership.get('owner', node_key)} node at {node_url}. "
+                    f"Make sure that laptop is running its node backend. Error: {e}"
+                )
+            )
+
+
+@router.get("/sql-write/ownership")
+async def get_db_ownership():
+    """
+    Return which laptop owns each database.
+    Used by the frontend to show lock icons and ownership labels.
+    """
+    return {
+        "databases": DB_OWNERSHIP,
+        "description": (
+            "Each database can only be written from the laptop that owns it. "
+            "The master backend forwards write requests to remote nodes automatically."
+        ),
+    }
+
 
 
 @router.get("/sql-query/tables")

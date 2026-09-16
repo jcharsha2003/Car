@@ -21,8 +21,11 @@ This is the "Seamless SQL decomposition and federation" from the rubric (criteri
 from typing import Any, Dict, List, Optional
 from datetime import datetime, date
 import time
+import os
 
 from ..sources import CaptureSource, InsuranceSource, RegistrationSource, TheftSource, MinistrySource
+from ..sources.remote_source import RemoteSource
+from ..config import NODE_B_URL, NODE_C_URL
 from .schema_mapper import SchemaMapper
 from .entity_resolver import EntityResolver, normalize_plate
 from .conflict_resolver import ConflictResolver
@@ -41,11 +44,23 @@ class Mediator:
     def __init__(self):
         # Initialize all source connectors (wrappers)
         # IIA-1: Sources → Wrappers → Mediator → Federated query → Answer
-        self.capture_source = CaptureSource()
-        self.insurance_source = InsuranceSource()
-        self.registration_source = RegistrationSource()
-        self.theft_source = TheftSource()
-        self.ministry_source = MinistrySource()
+        #
+        # DISTRIBUTED ARCHITECTURE:
+        #   Master laptop owns capture.db  → local SQLite
+        #   Laptop B owns insurance+registration → RemoteSource over HTTP
+        #   Laptop C owns theft+ministry         → RemoteSource over HTTP
+        #
+        # RemoteSource implements the same interface as local sources so the
+        # rest of the Mediator code works without any changes.
+        self.capture_source = CaptureSource()  # LOCAL
+
+        # Laptop B sources — HTTP if NODE_B_URL points to a real host
+        self.insurance_source = RemoteSource(NODE_B_URL, "insurance")
+        self.registration_source = RemoteSource(NODE_B_URL, "registration")
+
+        # Laptop C sources — HTTP if NODE_C_URL points to a real host
+        self.theft_source = RemoteSource(NODE_C_URL, "theft")
+        self.ministry_source = RemoteSource(NODE_C_URL, "ministry")
 
         # Initialize integration modules
         self.schema_mapper = SchemaMapper()

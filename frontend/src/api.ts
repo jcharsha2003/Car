@@ -91,8 +91,25 @@ export const api = {
     }
     return res.json();
   },
+  sqlWrite: async (query: string, database: string) => {
+    const res = await fetch(`${API_BASE}/api/sql-write`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, database }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
   getSqlTables: async () => {
     const res = await fetch(`${API_BASE}/api/sql-query/tables`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+  getDbOwnership: async () => {
+    const res = await fetch(`${API_BASE}/api/sql-write/ownership`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   },
