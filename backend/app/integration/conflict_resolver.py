@@ -91,8 +91,11 @@ class ConflictResolver:
         if not capture_record or not registration_record:
             return None
 
-        detected = capture_record.get("detected_color", "").upper().strip()
-        registered = registration_record.get("registered_color", "").upper().strip()
+        detected = capture_record.get("detected_color") or ""
+        detected = detected.upper().strip()
+        
+        registered = registration_record.get("registered_color") or ""
+        registered = registered.upper().strip()
 
         if not detected or not registered:
             return None

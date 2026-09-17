@@ -54,14 +54,22 @@ class ANPRPipeline:
         self._load_models()
 
     def _load_models(self):
-        """Lazy-load YOLO model."""
+        """Lazy-load YOLO models."""
         if YOLO_AVAILABLE:
             try:
+                # We load both the general vehicle detector and the specialized plate detector
                 self.vehicle_model = YOLO("yolov8n.pt")
-                logger.info("YOLOv8n loaded successfully.")
+                plate_model_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "plate_model.pt")
+                if os.path.exists(plate_model_path):
+                    self.plate_model = YOLO(plate_model_path)
+                    logger.info("YOLOv8 vehicle & plate models loaded successfully.")
+                else:
+                    self.plate_model = None
+                    logger.warning(f"Plate model not found at {plate_model_path}")
             except Exception as e:
-                logger.warning(f"Could not load YOLOv8n: {e}")
+                logger.warning(f"Could not load YOLO models: {e}")
                 self.vehicle_model = None
+                self.plate_model = None
 
     def _detect_vehicles(self, image: np.ndarray) -> List[Dict[str, Any]]:
         """Detect vehicles using YOLOv8."""
@@ -86,51 +94,60 @@ class ANPRPipeline:
 
         return detections
 
-    def _detect_plate_region(self, vehicle_img: np.ndarray) -> Optional[np.ndarray]:
+    def _detect_plate_candidates(self, vehicle_img: np.ndarray) -> List[np.ndarray]:
         """
-        Detect the number plate region within a vehicle image.
-        Uses edge detection + contour analysis as a heuristic fallback.
+        Detect number plate region using a state-of-the-art YOLOv8 license plate model.
+        Returns a list of candidate plate crops (best first) + fallbacks.
         """
-        if not CV2_AVAILABLE:
-            return vehicle_img  # Return full image as fallback
+        candidates = []
+        
+        # ─── PRIMARY METHOD: YOLOv8 Plate Detection ───
+        if YOLO_AVAILABLE and hasattr(self, 'plate_model') and self.plate_model is not None:
+            results = self.plate_model(vehicle_img, verbose=False)
+            plate_detections = []
+            
+            for result in results:
+                for box in result.boxes:
+                    # Collect all detections (license plate class is usually 0)
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    conf = float(box.conf[0])
+                    plate_detections.append({
+                        "bbox": [x1, y1, x2, y2],
+                        "confidence": conf
+                    })
+            
+            # Sort by confidence
+            plate_detections.sort(key=lambda x: x["confidence"], reverse=True)
+            
+            for det in plate_detections:
+                x1, y1, x2, y2 = det["bbox"]
+                # Add generous padding so edge characters (like 'H') are not clipped
+                pad = 10
+                h, w = vehicle_img.shape[:2]
+                x1 = max(0, x1 - pad)
+                y1 = max(0, y1 - pad)
+                x2 = min(w, x2 + pad)
+                y2 = min(h, y2 + pad)
+                
+                plate_crop = vehicle_img[y1:y2, x1:x2]
+                if plate_crop.size > 0:
+                    candidates.append(plate_crop)
+                    # Also add a 2x upscaled version for better OCR on small/blurry plates
+                    upscaled = cv2.resize(plate_crop, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                    candidates.append(upscaled)
+                    logger.info(f"YOLO Plate Crop: {x2-x1}x{y2-y1} px, conf={det['confidence']:.2f}")
 
-        gray = cv2.cvtColor(vehicle_img, cv2.COLOR_BGR2GRAY) if len(vehicle_img.shape) == 3 else vehicle_img
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        edges = cv2.Canny(blurred, 50, 150)
-        contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-        plate_candidates = []
+        # ─── FALLBACK 1: Lower third of vehicle (plates are always at the bottom) ───
         h, w = vehicle_img.shape[:2]
+        lower_third = vehicle_img[int(h * 0.55):h, :]
+        if lower_third.size > 0:
+            candidates.append(lower_third)
 
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if area < 500:
-                continue
-            rect = cv2.minAreaRect(contour)
-            box_w, box_h = rect[1]
-            if box_h == 0:
-                continue
-            aspect = box_w / box_h if box_w > box_h else box_h / box_w
-            # License plates typically have 2:1 to 5:1 aspect ratio
-            if 1.5 <= aspect <= 6.0:
-                x, y, rw, rh = cv2.boundingRect(contour)
-                # Must be in lower 2/3 of vehicle image (plates are below)
-                if y > h * 0.2:
-                    plate_candidates.append((area, x, y, rw, rh))
+        # ─── FALLBACK 2: Full image ───
+        candidates.append(vehicle_img)
 
-        if not plate_candidates:
-            return vehicle_img
-
-        # Take largest candidate
-        plate_candidates.sort(key=lambda x: x[0], reverse=True)
-        _, px, py, pw, ph = plate_candidates[0]
-        # Add padding
-        pad = 5
-        px = max(0, px - pad)
-        py = max(0, py - pad)
-        pw = min(w - px, pw + 2 * pad)
-        ph = min(h - py, ph + 2 * pad)
-        return vehicle_img[py:py+ph, px:px+pw]
+        logger.info(f"Total plate candidates: {len(candidates)}")
+        return candidates
 
     def process_image_bytes(self, image_bytes: bytes) -> Dict[str, Any]:
         """
@@ -170,7 +187,7 @@ class ANPRPipeline:
                 return result
             result["pipeline_stages"]["image_loaded"] = True
 
-            # Stage 2: Vehicle detection
+            # Stage 2: Vehicle detection (YOLO)
             vehicles = self._detect_vehicles(image)
             if vehicles:
                 best_vehicle = max(vehicles, key=lambda x: x["confidence"])
@@ -183,30 +200,48 @@ class ANPRPipeline:
                 vehicle_crop = image
                 result["pipeline_stages"]["vehicle_detected"] = False
 
-            # Stage 3: Color detection (simple dominant color)
+            # Stage 3: Color detection
             result["detected_color"] = self._detect_dominant_color(vehicle_crop)
             result["pipeline_stages"]["color_detected"] = True
 
-            # Stage 4: Plate region detection
-            plate_img = self._detect_plate_region(vehicle_crop)
-            result["pipeline_stages"]["plate_region_detected"] = plate_img is not vehicle_crop
+            # Stage 4: Plate region detection — returns ranked candidates
+            plate_candidates = self._detect_plate_candidates(vehicle_crop)
+            result["pipeline_stages"]["plate_region_detected"] = len(plate_candidates) > 1
 
-            # Stage 5: OCR
-            raw_text, confidence = read_plate_text(plate_img)
-            result["raw_ocr"] = raw_text
-            result["ocr_confidence"] = confidence
+            # Stage 5: Multi-pass OCR — try each candidate until we get a valid plate
+            # Also try an upscaled version of each candidate for small/blurry plates
+            best_text, best_conf = None, 0.0
+            for candidate in plate_candidates:
+                # Try original size
+                text, conf = read_plate_text(candidate)
+                if text and conf > best_conf:
+                    best_text, best_conf = text, conf
+                    if is_valid_plate_format(normalize_plate(text)):
+                        break  # Found a valid format — stop searching
+
+                # Try 2x upscaled (helps with small plates)
+                if candidate.shape[0] < 80:
+                    upscaled = cv2.resize(candidate, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                    text2, conf2 = read_plate_text(upscaled)
+                    if text2 and conf2 > best_conf:
+                        best_text, best_conf = text2, conf2
+                        if is_valid_plate_format(normalize_plate(text2)):
+                            break
+
+            result["raw_ocr"] = best_text
+            result["ocr_confidence"] = best_conf
             result["pipeline_stages"]["ocr_run"] = True
 
             # Stage 6: Normalize
-            if raw_text:
-                normalized = normalize_plate(raw_text)
+            if best_text:
+                normalized = normalize_plate(best_text)
                 result["plate"] = normalized
                 result["is_valid_format"] = is_valid_plate_format(normalized)
                 result["pipeline_stages"]["normalized"] = True
 
         except Exception as e:
             result["error"] = str(e)
-            logger.error(f"ANPR pipeline error: {e}")
+            logger.error(f"ANPR pipeline error: {e}", exc_info=True)
 
         return result
 

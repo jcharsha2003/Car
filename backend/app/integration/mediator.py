@@ -289,10 +289,15 @@ class Mediator:
             insurance, theft, registration, conflict_report["conflicts"]
         )
 
+        from .entity_resolver import decode_rto_state
+        decoded_origin = decode_rto_state(normalized)
+
         # Step 6: Assemble unified vehicle view
         unified_view = {
             "registration_number": normalized,
             "query_timestamp": datetime.now().isoformat(),
+            "decoded_origin": decoded_origin,
+            "all_records_empty": not (capture or insurance or registration or theft or ministry),
 
             # From Registration Source (vehicle_reg_no → registration_number)
             "vehicle": {

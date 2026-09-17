@@ -34,7 +34,7 @@ export default function UnifiedVehicleView({ data }: UnifiedVehicleViewProps) {
           </div>
         </div>
 
-        {/* Sources availability */}
+      {/* Sources availability */}
         <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
           {Object.entries(integration_metadata?.data_availability || {}).map(([src, avail]: [string, any]) => (
             <div key={src} style={{
@@ -50,6 +50,18 @@ export default function UnifiedVehicleView({ data }: UnifiedVehicleViewProps) {
             {integration_metadata?.sources_with_data}/{integration_metadata?.sources_queried} sources have data
           </div>
         </div>
+
+        {/* Origin Decoder (When no records found) */}
+        {data.all_records_empty && data.decoded_origin && (
+          <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--color-primary-dim)', borderRadius: 8, border: '1px solid rgba(59,130,246,0.3)' }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: 14, color: 'var(--color-primary)' }}>Vehicle Identified but Not Found in DB</h3>
+            <div style={{ display: 'flex', gap: 24, fontSize: 13 }}>
+              <div><span style={{ color: 'var(--text-muted)', marginRight: 6 }}>State:</span> <strong>{data.decoded_origin.state}</strong></div>
+              <div><span style={{ color: 'var(--text-muted)', marginRight: 6 }}>Country:</span> <strong>{data.decoded_origin.country}</strong></div>
+              <div><span style={{ color: 'var(--text-muted)', marginRight: 6 }}>RTO Code:</span> <strong>{data.decoded_origin.rto_code}</strong></div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Conflicts */}
@@ -188,7 +200,6 @@ export default function UnifiedVehicleView({ data }: UnifiedVehicleViewProps) {
             <div><div className="info-key" style={{ marginBottom: 2 }}>Timestamp</div><div style={{ fontSize: 13 }}>{data.last_capture.capture_timestamp?.split('.')[0].replace('T', ' ')}</div></div>
             <div><div className="info-key" style={{ marginBottom: 2 }}>Location</div><div style={{ fontSize: 13 }}>{data.last_capture.capture_location || '—'}</div></div>
             <div><div className="info-key" style={{ marginBottom: 2 }}>Detected Type</div><div style={{ fontSize: 13 }}>{data.last_capture.detected_vehicle_type || '—'}</div></div>
-            <div><div className="info-key" style={{ marginBottom: 2 }}>Detected Color</div><div style={{ fontSize: 13 }}>{data.last_capture.detected_color || '—'}</div></div>
             <div><div className="info-key" style={{ marginBottom: 2 }}>Confidence</div><div style={{ fontSize: 13 }}>{data.last_capture.detection_confidence ? `${(data.last_capture.detection_confidence * 100).toFixed(0)}%` : '—'}</div></div>
           </div>
         </div>

@@ -10,6 +10,9 @@ from typing import Optional, Tuple
 
 import numpy as np
 
+# Import entity_resolver for OCR auto-correction (positional character mapping)
+from ..integration.entity_resolver import normalize_plate, INDIAN_STATES
+
 logger = logging.getLogger(__name__)
 
 # Try to import EasyOCR
@@ -53,21 +56,11 @@ def _is_plate_format(text: str) -> bool:
 
 def preprocess_plate_image(image: np.ndarray) -> np.ndarray:
     """
-    Preprocess a plate image for better OCR accuracy.
-    Steps: grayscale -> resize -> denoise -> threshold
+    Skip manual preprocessing. EasyOCR's deep neural networks are trained on raw color 
+    images. Manual contrast enhancement and grayscaling often destroy the anti-aliased 
+    edges that the CNN needs to read text accurately.
     """
-    import cv2
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
-    # Resize to a standard height
-    h, w = gray.shape
-    target_height = 64
-    scale = target_height / h
-    resized = cv2.resize(gray, (int(w * scale), target_height))
-    # Denoise
-    denoised = cv2.fastNlMeansDenoising(resized, h=10)
-    # Threshold
-    _, thresholded = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return thresholded
+    return image
 
 
 def read_plate_text(image: np.ndarray) -> Tuple[Optional[str], float]:
@@ -106,19 +99,34 @@ def read_plate_text(image: np.ndarray) -> Tuple[Optional[str], float]:
         fallback_candidates = []
 
         for (_, text, conf) in results:
+            # 1. First remove garbage characters
             cleaned = re.sub(r'[^A-Z0-9]', '', text.upper())
             if not cleaned:
                 continue
-            if _is_plate_format(cleaned):
-                candidates.append((cleaned, float(conf)))
+            
+            # 2. REJECT purely alphabetic text (stickers like "VEHICLE", "SUZUKI", "IND")
+            #    Real Indian plates ALWAYS contain digits.
+            if cleaned.isalpha():
+                logger.debug(f"Skipping pure-alpha text: '{cleaned}' (likely a sticker)")
+                continue
+            
+            # 3. APPLY POSITIONAL OCR CORRECTION FIRST (The GitHub approach)
+            #    This fixes 'HR26DCO165' -> 'HR26DC0165' before checking the format.
+            corrected = normalize_plate(cleaned)
+            
+            # 4. Now check if it strictly matches the plate format
+            if _is_plate_format(corrected):
+                candidates.append((corrected, float(conf)))
             else:
-                fallback_candidates.append((cleaned, float(conf)))
+                # 5. Filter out very short texts (like "IND") from fallbacks
+                if len(corrected) >= 6:
+                    fallback_candidates.append((corrected, float(conf)))
 
         # Prefer plate-format matches (direct hit — OCR read the full plate cleanly)
         if candidates:
             candidates.sort(key=lambda x: x[1], reverse=True)
             best_text, best_conf = candidates[0]
-            logger.info(f"Plate-format OCR match: '{best_text}' (conf={best_conf:.2f})")
+            logger.info(f"Plate-format OCR match (auto-corrected): '{best_text}' (conf={best_conf:.2f})")
             return best_text, best_conf
 
         # Try concatenating all pieces — plate may be split across regions
@@ -127,12 +135,12 @@ def read_plate_text(image: np.ndarray) -> Tuple[Optional[str], float]:
             joined_pieces = ''.join(
                 t for t, _ in sorted(fallback_candidates, key=lambda x: x[1], reverse=True)
             )
-            joined_cleaned = re.sub(r'[^A-Z0-9]', '', joined_pieces.upper())
+            joined_corrected = normalize_plate(re.sub(r'[^A-Z0-9]', '', joined_pieces.upper()))
             avg_conf = sum(c for _, c in fallback_candidates) / len(fallback_candidates)
 
-            if _is_plate_format(joined_cleaned):
-                logger.info(f"Joined OCR match: '{joined_cleaned}' (conf={avg_conf:.2f})")
-                return joined_cleaned, avg_conf
+            if _is_plate_format(joined_corrected):
+                logger.info(f"Joined OCR match (auto-corrected): '{joined_corrected}' (conf={avg_conf:.2f})")
+                return joined_corrected, avg_conf
 
             # True fallback: highest-confidence single result
             fallback_candidates.sort(key=lambda x: x[1], reverse=True)

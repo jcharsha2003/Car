@@ -384,6 +384,7 @@ def _run_select_remote(node_url: str, query: str, db_name: str) -> Dict[str, Any
             f"{node_url}/api/node/sql-query",
             json={"query": query, "database": db_name},
             timeout=5,
+            headers={"ngrok-skip-browser-warning": "69420"},
         )
         if resp.status_code == 200:
             return resp.json()
@@ -537,6 +538,7 @@ async def run_sql_write(request: SqlWriteRequest):
                 f"{node_url}/api/node/sql-write",
                 json={"query": query, "database": target},
                 timeout=5,
+                headers={"ngrok-skip-browser-warning": "69420"},
             )
             if resp.status_code == 200:
                 data = resp.json()

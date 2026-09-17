@@ -18,8 +18,8 @@ from typing import Any, Dict, List, Optional, Tuple
 # Common OCR misrecognitions for vehicle plates
 # ─────────────────────────────────────────────────────────────────────────────
 OCR_CONFUSION: Dict[str, List[str]] = {
-    "O": ["0"],
-    "0": ["O"],
+    "O": ["0", "D", "Q"],
+    "0": ["O", "D", "Q"],
     "I": ["1", "L"],
     "1": ["I", "L"],
     "L": ["I", "1"],
@@ -29,26 +29,102 @@ OCR_CONFUSION: Dict[str, List[str]] = {
     "5": ["S"],
     "Z": ["2"],
     "2": ["Z"],
-    "G": ["6"],
+    "G": ["6", "C"],
     "6": ["G", "C"],
     "Q": ["0", "O"],
+    "A": ["H", "4"],   # A ↔ H confusion (very common in OCR)
+    "H": ["A"],         # H ↔ A confusion
+    "D": ["0", "O"],
+    "C": ["G", "6"],
+    "4": ["A"],
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# INDIAN RTO STATE CODES
+# ─────────────────────────────────────────────────────────────────────────────
+INDIAN_STATES = {
+    "AP": "Andhra Pradesh", "AR": "Arunachal Pradesh", "AS": "Assam", "BR": "Bihar",
+    "CG": "Chhattisgarh", "GA": "Goa", "GJ": "Gujarat", "HR": "Haryana",
+    "HP": "Himachal Pradesh", "JH": "Jharkhand", "KA": "Karnataka", "KL": "Kerala",
+    "MP": "Madhya Pradesh", "MH": "Maharashtra", "MN": "Manipur", "ML": "Meghalaya",
+    "MZ": "Mizoram", "NL": "Nagaland", "OR": "Odisha", "OD": "Odisha", "PB": "Punjab",
+    "RJ": "Rajasthan", "SK": "Sikkim", "TN": "Tamil Nadu", "TR": "Tripura",
+    "UP": "Uttar Pradesh", "UK": "Uttarakhand", "WB": "West Bengal", "TS": "Telangana",
+    "AN": "Andaman and Nicobar Islands", "CH": "Chandigarh", "DD": "Daman and Diu",
+    "DL": "Delhi", "LD": "Lakshadweep", "PY": "Puducherry", "JK": "Jammu and Kashmir",
+    "LA": "Ladakh"
+}
+
+def decode_rto_state(plate: str) -> Optional[Dict[str, str]]:
+    """Decode the state and country from a normalized Indian license plate."""
+    if not plate or len(plate) < 2:
+        return None
+    
+    state_code = plate[:2].upper()
+    if state_code in INDIAN_STATES:
+        return {
+            "country": "India",
+            "state": INDIAN_STATES[state_code],
+            "rto_code": state_code
+        }
+    return None
 
 
 def normalize_plate(plate: str) -> str:
     """
     Normalize a vehicle plate string to canonical uppercase with no separators.
-
-    Examples:
-        "UP 32 AB 1234" → "UP32AB1234"
-        "UP-32-AB-1234" → "UP32AB1234"
-        "up32ab1234"    → "UP32AB1234"
-        "MH 02 EF-9012" → "MH02EF9012"
+    Also auto-corrects common OCR confusions (e.g. O vs 0, I vs 1) based on standard format.
+    Finally, validates the state code against known Indian RTO codes and attempts
+    OCR-based correction if the state code is invalid.
     """
     if not plate:
         return ""
     # Remove all non-alphanumeric characters and convert to uppercase
     normalized = re.sub(r'[^A-Za-z0-9]', '', plate).upper()
+    
+    # Auto-correct common OCR mistakes for Indian plates
+    # Format: [2 Letters][2 Digits][1-3 Letters][4 Digits]
+    if 8 <= len(normalized) <= 11:
+        l2d = {"O": "0", "I": "1", "L": "1", "B": "8", "S": "5", "Z": "2", "G": "6", "Q": "0", "D": "0"}
+        d2l = {"0": "O", "1": "I", "8": "B", "5": "S", "2": "Z", "6": "G"}
+        chars = list(normalized)
+        
+        # First 2 must be letters
+        for i in range(2):
+            if chars[i] in d2l: chars[i] = d2l[chars[i]]
+        # Next 2 must be digits
+        for i in range(2, min(4, len(chars))):
+            if chars[i] in l2d: chars[i] = l2d[chars[i]]
+        # Last 4 must be digits
+        for i in range(max(4, len(chars)-4), len(chars)):
+            if chars[i] in l2d: chars[i] = l2d[chars[i]]
+        # Middle part must be letters
+        for i in range(4, len(chars)-4):
+            if chars[i] in d2l: chars[i] = d2l[chars[i]]
+            
+        normalized = "".join(chars)
+        
+        # ─── STATE CODE VALIDATION & OCR CORRECTION ───
+        # If the first 2 letters don't form a valid Indian state code,
+        # try OCR confusion pairs to find a valid one.
+        state_code = normalized[:2]
+        if state_code not in INDIAN_STATES:
+            # Try all single-character OCR substitutions on the 2-char state code
+            best_state = None
+            for i in range(2):
+                ch = state_code[i]
+                if ch in OCR_CONFUSION:
+                    for replacement in OCR_CONFUSION[ch]:
+                        trial = state_code[:i] + replacement + state_code[i+1:]
+                        if trial in INDIAN_STATES:
+                            best_state = trial
+                            break
+                if best_state:
+                    break
+            
+            if best_state:
+                normalized = best_state + normalized[2:]
+
     return normalized
 
 

@@ -35,6 +35,7 @@ class RemoteSource:
         self.db_name = db_name
         self.source_name = db_name
         self._timeout = 5  # seconds — fail fast if node is down
+        self._headers = {"ngrok-skip-browser-warning": "69420"}
 
     # ── Compatibility shim so Mediator can call .get_by_registration() ────────
 
@@ -45,7 +46,7 @@ class RemoteSource:
             return None
         try:
             url = f"{self.node_url}/api/node/vehicle/{self.db_name}/{registration_number}"
-            resp = requests.get(url, timeout=self._timeout)
+            resp = requests.get(url, timeout=self._timeout, headers=self._headers)
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("record")  # may be None if not found
@@ -63,7 +64,7 @@ class RemoteSource:
             return {"source": self.db_name, "error": "requests not installed", "tables": {}}
         try:
             url = f"{self.node_url}/api/node/schema/{self.db_name}"
-            resp = requests.get(url, timeout=self._timeout)
+            resp = requests.get(url, timeout=self._timeout, headers=self._headers)
             if resp.status_code == 200:
                 return resp.json()
             return {"source": self.db_name, "error": f"HTTP {resp.status_code}", "tables": {}}
@@ -76,7 +77,7 @@ class RemoteSource:
             return {}
         try:
             url = f"{self.node_url}/api/node/statistics/{self.db_name}"
-            resp = requests.get(url, timeout=self._timeout)
+            resp = requests.get(url, timeout=self._timeout, headers=self._headers)
             return resp.json() if resp.status_code == 200 else {}
         except Exception:
             return {}
@@ -91,6 +92,7 @@ class RemoteSource:
                 url,
                 json={"query": query, "database": self.db_name},
                 timeout=self._timeout,
+                headers=self._headers,
             )
             if resp.status_code == 200:
                 return resp.json()
@@ -108,6 +110,7 @@ class RemoteSource:
                 url,
                 json={"query": query, "database": self.db_name},
                 timeout=self._timeout,
+                headers=self._headers,
             )
             if resp.status_code == 200:
                 return resp.json()
@@ -121,7 +124,7 @@ class RemoteSource:
         if not _REQUESTS_OK:
             return False
         try:
-            resp = requests.get(f"{self.node_url}/api/node/health", timeout=2)
+            resp = requests.get(f"{self.node_url}/api/node/health", timeout=2, headers=self._headers)
             return resp.status_code == 200
         except Exception:
             return False
@@ -145,7 +148,7 @@ class RemoteSource:
             return []
         try:
             url = f"{self.node_url}/api/node/vehicle/{self.db_name}/{registration_number}/{kind}"
-            resp = requests.get(url, timeout=self._timeout)
+            resp = requests.get(url, timeout=self._timeout, headers=self._headers)
             if resp.status_code == 200:
                 return resp.json().get("records", [])
             return []
