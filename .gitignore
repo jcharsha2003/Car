@@ -62,3 +62,7 @@ logs/
 htmlcov/
 .coverage
 coverage.xml
+
+# ─── Unused folders ──────────────────────────────────────────────────────────
+New folder/
+
